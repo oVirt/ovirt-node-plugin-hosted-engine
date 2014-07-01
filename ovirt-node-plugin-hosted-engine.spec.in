@@ -12,6 +12,7 @@ Source0:        http://plain.resources.ovirt.org/pub/ovirt-master-snapshot/src/%
 License:        GPLv2+
 Group:          Applications/System
 Summary:        Hosted Engine plugin for %{product_family} image
+BuildRequires:  python-devel
 Requires:       ovirt-hosted-engine-setup
 Requires:       screen
 
