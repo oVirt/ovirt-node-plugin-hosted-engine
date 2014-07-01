@@ -1,10 +1,14 @@
 %global product_family oVirt Node
 %define recipe_root %{_datadir}/ovirt-node-recipe
 
+%global         package_version @PACKAGE_VERSION@
+%global         package_name @PACKAGE_NAME@
+
+
 Name:           ovirt-node-plugin-hosted-engine
-Version:        0.0.1
-Release:        0.999%{?BUILD_NUMBER}%{?extra_release}%{?dist}
-Source0:        %{name}-%{version}.tar.gz
+Version:        @PACKAGE_RPM_VERSION@
+Release:        @PACKAGE_RPM_RELEASE@%{?release_suffix}%{?dist}
+Source0:        http://plain.resources.ovirt.org/pub/ovirt-master-snapshot/src/%{name}/%{name}-%{package_version}.tar.gz
 License:        GPLv2+
 Group:          Applications/System
 Summary:        Hosted Engine plugin for %{product_family} image
@@ -39,7 +43,7 @@ BuildRequires:  python2-devel
 
 
 %prep
-%setup -q
+%setup -q -n "%{name}-%{package_version}"
 
 
 %build
