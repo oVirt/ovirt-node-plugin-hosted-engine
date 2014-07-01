@@ -60,6 +60,9 @@ rpm:	srpm
 	@echo "rpm(s) available at '$(TMPREPOS)'"
 	@echo
 
+snapshot-rpm:
+	make rpm RELEASE_SUFFIX=".$$(date --utc +%Y%m%d).git$$(git rev-parse --short HEAD)"
+
 publish:
 	mkdir -p $(OVIRT_CACHE_DIR)
 	rsync -aq $(TMPREPOS)/ $(OVIRT_CACHE_DIR)/ovirt
