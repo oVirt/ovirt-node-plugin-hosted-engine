@@ -32,6 +32,9 @@ AC_SUBST([PLUGINNAME], ['oVirt Node Hosted Engine Plugin'])
 
 AM_INIT_AUTOMAKE([-Wall -Werror foreign -Wno-portability tar-pax])
 
+AC_ARG_VAR([RPMBUILD], [path to rpmbuild utility])
+AC_CHECK_PROGS([RPMBUILD], [rpmbuild])
+
 AM_PATH_PYTHON
 
 AC_CONFIG_FILES([Makefile

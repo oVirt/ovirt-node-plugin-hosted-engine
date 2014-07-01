@@ -40,21 +40,31 @@ DISTCLEANFILES = $(PACKAGE)-$(VERSION).tar.gz \
 
 DISTCLEANDIRS = autom4te.cache
 
-rpms: dist
-	rpmbuild $(RPM_FLAGS) -ta $(distdir).tar.gz
 
-srpms: dist
-	rpmbuild $(RPM_FLAGS) -ts $(distdir).tar.gz
+TMPREPOS = tmp.repos
+RPMBUILD_ARGS :=
+RPMBUILD_ARGS += --define="_topdir `pwd`/$(TMPREPOS)"
+RPMBUILD_ARGS += $(if $(RELEASE_SUFFIX), --define="release_suffix $$RELEASE_SUFFIX")
 
-publish: rpms
+srpm:	dist
+	rm -fr "$(TMPREPOS)"
+	mkdir -p $(TMPREPOS)/{SPECS,RPMS,SRPMS,SOURCES}
+	$(RPMBUILD) $(RPMBUILD_ARGS) -ts "$(PACKAGE_TARNAME)-$(PACKAGE_VERSION).tar.gz"
+	@echo
+	@echo "srpm available at '$(TMPREPOS)'"
+	@echo
+
+rpm:	srpm
+	$(RPMBUILD) $(RPMBUILD_ARGS) --rebuild "$(TMPREPOS)"/SRPMS/*.src.rpm
+	@echo
+	@echo "rpm(s) available at '$(TMPREPOS)'"
+	@echo
+
+publish:
 	mkdir -p $(OVIRT_CACHE_DIR)
-	rsync -aq $(shell rpm --eval '%{_rpmdir}')/ $(OVIRT_CACHE_DIR)/ovirt/
-	rsync -aq $(shell rpm --eval '%{_srcrpmdir}')/ $(OVIRT_CACHE_DIR)/ovirt/src
+	rsync -aq $(TMPREPOS)/ $(OVIRT_CACHE_DIR)/ovirt
 	createrepo $(OVIRT_CACHE_DIR)/ovirt
 
-iso: publish
-	cd recipe
-	make node
 
 .PHONY: rpms publish srpms
 
