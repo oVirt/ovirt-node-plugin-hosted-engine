@@ -19,7 +19,7 @@
 # MA  02110-1301, USA.  A copy of the GNU General Public License is
 # also available at http://www.gnu.org/copyleft/gpl.html.
 
-from ovirt.node import plugins, ui, utils, valid
+from ovirt.node import plugins, ui, utils, valid, log
 from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
 from ovirt_hosted_engine_ha.client import client
@@ -33,6 +33,10 @@ HOSTED_ENGINE_SETUP_DIR = "/data/ovirt-hosted-engine-setup"
 Configure Hosted Engine
 """
 
+
+LOGGER = log.getLogger(__name__)
+
+
 def image_retrieve(url, dest):
     dest = os.path.join(dest, os.path.basename(url))
     try:
@@ -40,7 +44,9 @@ def image_retrieve(url, dest):
                "--tries=3", "-O", dest, url]
         subprocess.check_call(cmd)
     except:
-        raise RuntimeError("Error Downloading ISO/OVA Image")
+        LOGGER.info("Cannot download ISO/OVA Image")
+        if os.path.exists(dest):
+            os.unlink(dest)
 
 def get_hosted_cfg(imagepath, pxe):
     ova = False
@@ -133,6 +139,7 @@ class Plugin(plugins.NodePlugin):
         pass
 
     def on_merge(self, effective_changes):
+        self._configure_ISO_OVA = False
         self.logger.info("Saving Hosted Engine Config")
         changes = Changeset(self.pending_changes(False))
         effective_model = Changeset(self.model())
@@ -151,17 +158,8 @@ class Plugin(plugins.NodePlugin):
             if not os.path.exists(HOSTED_ENGINE_SETUP_DIR):
                 os.makedirs(HOSTED_ENGINE_SETUP_DIR)
             localpath = os.path.join(HOSTED_ENGINE_SETUP_DIR, os.path.basename(imagepath))
-            if not os.path.exists(localpath):
-                image_retrieve(imagepath, HOSTED_ENGINE_SETUP_DIR)
             temp_fd, temp_cfg_file = tempfile.mkstemp()
             os.close(temp_fd)
-            hosted_cfg = get_hosted_cfg(os.path.basename(imagepath), pxe)
-            with open(temp_cfg_file, "w") as f:
-                 f.write(hosted_cfg)
-            self.logger.info(temp_cfg_file)
-            self.logger.info(hosted_cfg)
-            self.logger.debug("Starting drop to setup")
-            utils.console.writeln("Beginning Hosted Engine Setup ...")
 
             def open_console():
                 utils.process.call("reset; screen ovirt-hosted-engine-setup" + \
@@ -172,19 +170,38 @@ class Plugin(plugins.NodePlugin):
                 with self.application.ui.suspended():
                     open_console()
 
+            if os.path.exists(localpath):
+                hosted_cfg = get_hosted_cfg(os.path.basename(imagepath), pxe)
+                with open(temp_cfg_file, "w") as f:
+                    f.write(hosted_cfg)
+                self.logger.info(temp_cfg_file)
+                self.logger.info(hosted_cfg)
+                self.logger.debug("Starting drop to setup")
+                utils.console.writeln("Beginning Hosted Engine Setup ...")
+                self._configure_ISO_OVA = True
+            else:
+                image_retrieve(imagepath, HOSTED_ENGINE_SETUP_DIR)
+
             try:
-                txt = "Setup will be ran with screen enabled that can be "
-                txt += "reconnected in the event of a timeout or connection "
-                txt += "failure.\n"
-                txt += "\nIt can be reconnected by running 'screen -d -r'"
+                if self._configure_ISO_OVA:
+                    txt = "Setup will be ran with screen enabled that can be "
+                    txt += "reconnected in the event of a timeout or "
+                    txt += "connection failure.\n"
+                    txt += "\nIt can be reconnected by running 'screen -d -r'"
 
-                dialog = ui.ConfirmationDialog("dialog.shell",
-                                               "Begin Hosted Engine Setup", txt
-                                               )
+                    dialog = ui.ConfirmationDialog("dialog.shell",
+                                                   "Begin Hosted Engine Setup",
+                                                   txt
+                                                   )
+                    dialog.buttons[0].on_activate.clear()
+                    dialog.buttons[0].on_activate.connect(ui.CloseAction())
+                    dialog.buttons[0].on_activate.connect(return_ok)
+                else:
+                    dialog = ui.InfoDialog("dialog.notice",
+                                           "Hosted Engine Setup",
+                                           "\n\nError Downloading " +
+                                           "ISO/OVA Image!")
 
-                dialog.buttons[0].on_activate.clear()
-                dialog.buttons[0].on_activate.connect(ui.CloseAction())
-                dialog.buttons[0].on_activate.connect(return_ok)
                 self.application.show(dialog)
 
             except:
