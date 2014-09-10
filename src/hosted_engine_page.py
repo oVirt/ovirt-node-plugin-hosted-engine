@@ -44,7 +44,7 @@ def image_retrieve(url, dest):
                "--tries=3", "-O", dest, url]
         subprocess.check_call(cmd)
     except:
-        LOGGER.info("Cannot download ISO/OVA Image")
+        LOGGER.info("Cannot download ISO/OVA Image", exc_info=True)
         if os.path.exists(dest):
             os.unlink(dest)
 
