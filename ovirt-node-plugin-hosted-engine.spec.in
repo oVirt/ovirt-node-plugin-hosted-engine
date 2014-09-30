@@ -15,6 +15,7 @@ Summary:        Hosted Engine plugin for %{product_family} image
 BuildRequires:  python-devel
 Requires:       ovirt-hosted-engine-setup
 Requires:       screen
+Requires:       python-requests
 
 
 %package recipe
