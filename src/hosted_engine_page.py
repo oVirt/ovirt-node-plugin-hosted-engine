@@ -24,8 +24,10 @@ from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
 from ovirt_hosted_engine_ha.client import client
 import os
+import requests
 import tempfile
-import subprocess #swap with process.call
+import threading
+import time
 
 VM_CONF_PATH = "/etc/ovirt-hosted-engine/vm.conf"
 HOSTED_ENGINE_SETUP_DIR = "/data/ovirt-hosted-engine-setup"
@@ -37,17 +39,6 @@ Configure Hosted Engine
 LOGGER = log.getLogger(__name__)
 
 
-def image_retrieve(url, dest):
-    dest = os.path.join(dest, os.path.basename(url))
-    try:
-        cmd = ["wget", "-nd", "--no-check-certificate", "--timeout=30",
-               "--tries=3", "-O", dest, url]
-        subprocess.check_call(cmd)
-    except:
-        LOGGER.info("Cannot download ISO/OVA Image", exc_info=True)
-        if os.path.exists(dest):
-            os.unlink(dest)
-
 def get_hosted_cfg(imagepath, pxe):
     ova = False
     boot = None
@@ -55,7 +46,7 @@ def get_hosted_cfg(imagepath, pxe):
     if imagepath.endswith(".iso"):
         boot = "cdrom"
         txt += "OVEHOSTED_VM/vmCDRom=str:%s\n" % \
-                    os.path.join(HOSTED_ENGINE_SETUP_DIR, imagepath)
+               os.path.join(HOSTED_ENGINE_SETUP_DIR, imagepath)
     elif imagepath.endswith(".gz"):
         boot = "disk"
         ova = True
@@ -70,8 +61,14 @@ def get_hosted_cfg(imagepath, pxe):
         txt += "OVEHOSTED_VM/ovfArchive=none:None\n"
     return txt
 
+
 class Plugin(plugins.NodePlugin):
     _server = None
+    _show_progressbar = False
+    _model = {}
+
+    def __init__(self, application):
+        super(Plugin, self).__init__(application)
 
     def name(self):
         return "Hosted Engine"
@@ -107,7 +104,9 @@ class Plugin(plugins.NodePlugin):
             "hosted_engine.diskpath": cfg["imagepath"] or "",
             "hosted_engine.pxe": cfg["pxe"] or False}
 
-        return model
+        self._model.update(model)
+
+        return self._model
 
     def validators(self):
         return {}
@@ -127,6 +126,15 @@ class Plugin(plugins.NodePlugin):
               ui.Divider("divider[1]"),
               ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM")
               ]
+
+        if self._show_progressbar:
+            if "progress" in self._model:
+                ws.append(ui.ProgressBar("download.progress",
+                                         int(self._model["progress"])))
+            else:
+                ws.append(ui.ProgressBar("download.progress", 0))
+
+            ws.append(ui.KeywordLabel("download.status", ""))
 
         page = ui.Page("page", ws)
         page.buttons = [ui.Button("action.setupengine",
@@ -157,31 +165,38 @@ class Plugin(plugins.NodePlugin):
             pxe = effective_model["hosted_engine.pxe"]
             if not os.path.exists(HOSTED_ENGINE_SETUP_DIR):
                 os.makedirs(HOSTED_ENGINE_SETUP_DIR)
-            localpath = os.path.join(HOSTED_ENGINE_SETUP_DIR, os.path.basename(imagepath))
-            temp_fd, temp_cfg_file = tempfile.mkstemp()
+            localpath = os.path.join(HOSTED_ENGINE_SETUP_DIR,
+                                     os.path.basename(imagepath))
+            temp_fd, self.temp_cfg_file = tempfile.mkstemp()
             os.close(temp_fd)
-
-            def open_console():
-                utils.process.call("reset; screen ovirt-hosted-engine-setup" + \
-                                   " --config-append=%s" % temp_cfg_file, \
-                                   shell=True)
-
-            def return_ok(dialog, changes):
-                with self.application.ui.suspended():
-                    open_console()
 
             if os.path.exists(localpath):
                 hosted_cfg = get_hosted_cfg(os.path.basename(imagepath), pxe)
-                with open(temp_cfg_file, "w") as f:
+                with open(self.temp_cfg_file, "w") as f:
                     f.write(hosted_cfg)
-                self.logger.info(temp_cfg_file)
+                self.logger.info(self.temp_cfg_file)
                 self.logger.info(hosted_cfg)
                 self.logger.debug("Starting drop to setup")
                 utils.console.writeln("Beginning Hosted Engine Setup ...")
                 self._configure_ISO_OVA = True
+                self.show_dialog()
             else:
-                image_retrieve(imagepath, HOSTED_ENGINE_SETUP_DIR)
+                self._show_progressbar = True
+                self.application.show(self.ui_content())
+                self._image_retrieve(imagepath, HOSTED_ENGINE_SETUP_DIR)
 
+        return self.ui_content()
+
+    def show_dialog(self):
+        def open_console():
+            utils.process.call("reset; screen ovirt-hosted-engine-setup" +
+                               " --config-append=%s" % self.temp_cfg_file,
+                               shell=True)
+
+        def return_ok(dialog, changes):
+            with self.application.ui.suspended():
+                open_console()
+        if self.application.current_plugin() is self:
             try:
                 if self._configure_ISO_OVA:
                     txt = "Setup will be ran with screen enabled that can be "
@@ -207,7 +222,92 @@ class Plugin(plugins.NodePlugin):
             except:
                 # Error when the UI is not running
                 open_console()
-        return self.ui_content()
+
+    def _image_retrieve(self, imagepath, setup_dir):
+        _downloader = DownloadThread(self, imagepath, setup_dir)
+        _downloader.start()
+
+
+class DownloadThread(threading.Thread):
+    ui_thread = None
+
+    def __init__(self, plugin, url, setup_dir):
+        super(DownloadThread, self).__init__()
+        self.he_plugin = plugin
+        self.url = url
+        self.setup_dir = setup_dir
+
+    @property
+    def logger(self):
+        return self.he_plugin.logger
+
+    def run(self):
+        try:
+            self.app = self.he_plugin.application
+            self.ui_thread = self.app.ui.thread_connection()
+
+            self.__run()
+        except Exception as e:
+            self.logger.exception("Downloader thread failed: %s " % e)
+
+    def __run(self):
+        # Wait a second before the UI refresh so we get the right widgets
+        time.sleep(.5)
+
+        path = "%s/%s" % (self.setup_dir, self.url.split('/')[-1])
+
+        ui_is_alive = lambda: any((t.name == "MainThread") and t.is_alive() for
+                                  t in threading.enumerate())
+
+        with open(path, 'wb') as f:
+            started = time.time()
+            r = requests.get(self.url, stream=True)
+            size = r.headers.get('content-length')
+            downloaded = 0
+
+            def update_ui():
+                # Get new handles every time, since switching pages means
+                # the widgets will get rebuilt and we need new handles to
+                # update
+                progressbar = self.he_plugin.widgets["download.progress"]
+                status = self.he_plugin.widgets["download.status"]
+
+                current = int(100.0 * (float(downloaded)/ float(size)))
+
+                progressbar.current(current)
+                speed = calculate_speed()
+                status.text(speed)
+
+                # Save it in the model so the page can update immediately
+                # on switching back instead of waiting for a tick
+                self.he_plugin._model.update({"download.status": speed})
+                self.he_plugin._model.update({"download.progressbar": current})
+
+            def calculate_speed():
+                raw = downloaded // (time.time() - started)
+                i = 0
+                friendly_names = ("B", "KB", "MB", "GB")
+                if int(raw / 1024) > 0:
+                    raw = raw / 1024
+                    i += 1
+                return "%0.2f %s/s" % (raw, friendly_names[i])
+
+            for chunk in r.iter_content(1024 * 256):
+                downloaded += len(chunk)
+                f.write(chunk)
+
+                if ui_is_alive():
+                    self.ui_thread.call(update_ui())
+                else:
+                    break
+
+        if not ui_is_alive():
+            os.unlink(path)
+
+        else:
+            self.he_plugin._configure_ISO_OVA = True
+            self.he_plugin.show_dialog()
+
 
 class HostedEngine(NodeConfigFileSection):
     keys = ("OVIRT_HOSTED_ENGINE_IMAGE_PATH",
@@ -220,4 +320,3 @@ class HostedEngine(NodeConfigFileSection):
         (valid.Boolean()(pxe))
         return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath,
                 "OVIRT_HOSTED_ENGINE_PXE": "yes" if pxe else None}
-
