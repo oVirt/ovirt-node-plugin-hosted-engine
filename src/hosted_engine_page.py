@@ -19,10 +19,13 @@
 # MA  02110-1301, USA.  A copy of the GNU General Public License is
 # also available at http://www.gnu.org/copyleft/gpl.html.
 
+from urlparse import urlparse
+
 from ovirt.node import plugins, ui, utils, valid, log
 from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
 from ovirt_hosted_engine_ha.client import client
+
 import os
 import requests
 import tempfile
@@ -105,6 +108,7 @@ class Plugin(plugins.NodePlugin):
             "hosted_engine.vm": vm,
             "hosted_engine.status": str(vm_status),
             "hosted_engine.diskpath": cfg["imagepath"] or "",
+            "hosted_engine.display_message": "",
             "hosted_engine.pxe": cfg["pxe"] or False}
 
         self._model.update(model)
@@ -112,7 +116,7 @@ class Plugin(plugins.NodePlugin):
         return self._model
 
     def validators(self):
-        return {}
+        return {"hosted_engine.diskpath": valid.Empty() | valid.URL()}
 
     def ui_content(self):
         ws = [ui.Header("header[0]", "Hosted Engine Setup"),
@@ -125,7 +129,8 @@ class Plugin(plugins.NodePlugin):
                               ("Engine Status: ")),
 
               ui.Divider("divider[0]"),
-              ui.Entry("hosted_engine.diskpath", "Engine ISO/OVA Path:"),
+              ui.Entry("hosted_engine.diskpath",
+                       "Engine ISO/OVA URL for download:"),
               ui.Divider("divider[1]"),
               ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM")
               ]
@@ -173,7 +178,18 @@ class Plugin(plugins.NodePlugin):
             temp_fd, self.temp_cfg_file = tempfile.mkstemp()
             os.close(temp_fd)
 
-            if os.path.exists(localpath):
+            if not imagepath and not pxe:
+                self._model['display_message'] = "\n\nYou must enter a URL or " \
+                    " choose PXE to install the Engine VM"
+                self.show_dialog()
+                return self.ui_content()
+
+            path_parsed = urlparse(imagepath)
+            if not path_parsed.scheme:
+                self._model['display_message'] = "\nCouldn't parse URL. " +\
+                                                 "please check it manually."
+                self.show_dialog()
+            elif os.path.exists(localpath):
                 hosted_cfg = get_hosted_cfg(os.path.basename(imagepath), pxe)
                 with open(self.temp_cfg_file, "w") as f:
                     f.write(hosted_cfg)
@@ -183,7 +199,8 @@ class Plugin(plugins.NodePlugin):
                 utils.console.writeln("Beginning Hosted Engine Setup ...")
                 self._configure_ISO_OVA = True
                 self.show_dialog()
-            else:
+            elif path_parsed.scheme == 'http' or \
+                    path_parsed.scheme == 'https':
                 self._show_progressbar = True
                 self.application.show(self.ui_content())
                 self._image_retrieve(imagepath, HOSTED_ENGINE_SETUP_DIR)
@@ -215,15 +232,21 @@ class Plugin(plugins.NodePlugin):
                     dialog.buttons[0].on_activate.connect(ui.CloseAction())
                     dialog.buttons[0].on_activate.connect(return_ok)
                 else:
+                    if self._model['display_message']:
+                        msg = self._model['display_message']
+                        self._model['display_message'] = ''
+                    else:
+                        msg = "\n\nError Downloading ISO/OVA Image!"
+
                     dialog = ui.InfoDialog("dialog.notice",
                                            "Hosted Engine Setup",
-                                           "\n\nError Downloading " +
-                                           "ISO/OVA Image!")
+                                           msg)
 
                 self.application.show(dialog)
 
             except:
                 # Error when the UI is not running
+                self.logger.info("Exception on TUI!", exc_info=True)
                 open_console()
 
     def _image_retrieve(self, imagepath, setup_dir):
@@ -264,8 +287,23 @@ class DownloadThread(threading.Thread):
 
         with open(path, 'wb') as f:
             started = time.time()
-            r = requests.get(self.url, stream=True)
-            size = r.headers.get('content-length')
+            try:
+                r = requests.get(self.url, stream=True)
+                if r.status_code != 200:
+                    self.he_plugin._model['display_message'] = \
+                        "\n\nCannot download the file: HTTP error code %s" % \
+                        str(r.status_code)
+                    os.unlink(path)
+                    return self.he_plugin.show_dialog()
+
+                size = r.headers.get('content-length')
+            except requests.exceptions.ConnectionError as e:
+                self.logger.info("Error downloading: %s" % e[0], exc_info=True)
+                self.he_plugin._model['display_message'] = \
+                    "\n\nConnection Error: %s!" % str(e[0])
+                os.unlink(path)
+                return self.he_plugin.show_dialog()
+
             downloaded = 0
 
             def update_ui():
@@ -275,7 +313,7 @@ class DownloadThread(threading.Thread):
                 progressbar = self.he_plugin.widgets["download.progress"]
                 status = self.he_plugin.widgets["download.status"]
 
-                current = int(100.0 * (float(downloaded)/ float(size)))
+                current = int(100.0 * (float(downloaded) / float(size)))
 
                 progressbar.current(current)
                 speed = calculate_speed()
@@ -319,6 +357,8 @@ class HostedEngine(NodeConfigFileSection):
 
     @NodeConfigFileSection.map_and_update_defaults_decorator
     def update(self, imagepath, pxe):
+        if not isinstance(pxe, bool):
+            pxe = True if pxe.lower() == 'true' else False
         (valid.Empty() | valid.Text())(imagepath)
         (valid.Boolean()(pxe))
         return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath,
