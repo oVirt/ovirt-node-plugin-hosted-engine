@@ -54,7 +54,10 @@ def get_hosted_cfg(imagepath, pxe):
                                 os.path.basename(imagepath))
     elif pxe:
         boot = "pxe"
-    txt += "OVEHOSTED_VM/vmBoot=str:%s\n" % boot
+    if boot:
+        txt += "OVEHOSTED_VM/vmBoot=str:%s\n" % boot
+    else:
+        txt += "OVEHOSTED_VM/vmBoot=none:None\n"
     if ova:
         txt += "OVEHOSTED_VM/ovfArchive=str:%s\n" % ova_path
     else:
