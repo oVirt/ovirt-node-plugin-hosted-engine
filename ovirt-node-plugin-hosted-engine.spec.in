@@ -12,11 +12,12 @@ Source0:        http://plain.resources.ovirt.org/pub/ovirt-master-snapshot/src/%
 License:        GPLv2+
 Group:          Applications/System
 Summary:        Hosted Engine plugin for %{product_family} image
-BuildRequires:  python-devel
+BuildRequires:  python2-devel
 Requires:       ovirt-hosted-engine-setup
 Requires:       screen
 Requires:       python-requests
 
+BuildArch:      noarch
 
 %package recipe
 Summary:        Kickstarts for building oVirt Node isos including %{name}
@@ -39,10 +40,6 @@ Provides kickstart files for generating an oVirt Node ISO image containing
 %files
 %{python_sitelib}/ovirt/node/setup/hostedengine/__init__.py*
 %{python_sitelib}/ovirt/node/setup/hostedengine/hosted_engine_page.py*
-
-BuildArch:      noarch
-BuildRequires:  python2-devel
-
 
 %prep
 %setup -q -n "%{name}-%{package_version}"
