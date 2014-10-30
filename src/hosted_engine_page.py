@@ -179,8 +179,8 @@ class Plugin(plugins.NodePlugin):
             os.close(temp_fd)
 
             if not imagepath and not pxe:
-                self._model['display_message'] = "\n\nYou must enter a URL or " \
-                    " choose PXE to install the Engine VM"
+                self._model['display_message'] = "\n\nYou must enter a URL" \
+                    " or choose PXE to install the Engine VM"
                 self.show_dialog()
                 return self.ui_content()
 
