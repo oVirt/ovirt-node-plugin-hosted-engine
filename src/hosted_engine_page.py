@@ -90,9 +90,10 @@ class Plugin(plugins.NodePlugin):
     def model(self):
         cfg = HostedEngine().retrieve()
 
-        conf_status = os.path.exists(VM_CONF_PATH)
+        conf_status = "Configured" if os.path.exists(VM_CONF_PATH) else \
+                      "Not configured"
         vm = None
-        if conf_status:
+        if conf_status == "Configured":
             with open(VM_CONF_PATH) as f:
                 for line in f:
                     if "vmName" in line:
