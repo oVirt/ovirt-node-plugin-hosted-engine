@@ -26,6 +26,7 @@ from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
 from ovirt_hosted_engine_ha.client import client
 
+import json
 import os
 import requests
 import tempfile
@@ -97,16 +98,12 @@ class Plugin(plugins.NodePlugin):
                     if "vmName" in line:
                         vm = line.strip().split("=")[1]
 
-        ha_cli = client.HAClient()
-        try:
-            vm_status = ha_cli.get_all_host_stats()
-        except:
-            vm_status = "Cannot connect to HA daemon, please check the logs"
+        vm_status = self.__get_ha_status()
 
         model = {
             "hosted_engine.enabled": str(conf_status),
             "hosted_engine.vm": vm,
-            "hosted_engine.status": str(vm_status),
+            "hosted_engine.status": vm_status,
             "hosted_engine.diskpath": cfg["imagepath"] or "",
             "hosted_engine.display_message": "",
             "hosted_engine.pxe": cfg["pxe"] or False}
@@ -252,6 +249,32 @@ class Plugin(plugins.NodePlugin):
     def _image_retrieve(self, imagepath, setup_dir):
         _downloader = DownloadThread(self, imagepath, setup_dir)
         _downloader.start()
+
+    def __get_ha_status(self):
+        def dict_from_string(string):
+            return json.loads(string)
+
+        host = None
+
+        ha_cli = client.HAClient()
+        try:
+            vm_status = ha_cli.get_all_host_stats()
+        except:
+            vm_status = "Cannot connect to HA daemon, please check the logs"
+        else:
+            for v in vm_status.values():
+                if dict_from_string(v['engine-status'])['health'] == "good":
+                    host = "Here" if v['host-id'] == \
+                           ha_cli.get_local_host_id() else v['hostname']
+                    host = v['hostname']
+
+        if not host:
+            vm_status = "Engine is down. Please check " + \
+                        "'hosted-engine --vm-status'"
+        else:
+            vm_status = "Engine is running on {host}".format(host=host)
+
+        return vm_status
 
 
 class DownloadThread(threading.Thread):
