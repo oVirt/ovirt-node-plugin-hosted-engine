@@ -40,5 +40,6 @@ AM_PATH_PYTHON
 AC_CONFIG_FILES([Makefile
                 src/Makefile
                 recipe/Makefile
+                rwtab/Makefile
                 ovirt-node-plugin-hosted-engine.spec])
 AC_OUTPUT
