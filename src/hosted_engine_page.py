@@ -24,6 +24,7 @@ from urlparse import urlparse
 from ovirt.node import plugins, ui, utils, valid, log
 from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
+from ovirt.node.utils.fs import File
 from ovirt_hosted_engine_ha.client import client
 
 import json
@@ -90,14 +91,15 @@ class Plugin(plugins.NodePlugin):
     def model(self):
         cfg = HostedEngine().retrieve()
 
-        conf_status = "Configured" if os.path.exists(VM_CONF_PATH) else \
-                      "Not configured"
+        configured = os.path.exists(VM_CONF_PATH)
+
+        conf_status = "Configured" if configured else "Not configured"
         vm = None
         if conf_status == "Configured":
-            with open(VM_CONF_PATH) as f:
-                for line in f:
-                    if "vmName" in line:
-                        vm = line.strip().split("=")[1]
+            f = File(VM_CONF_PATH)
+            if "vmName" in f.read():
+                vm = [line.strip().split("=")[1] for line in f
+                      if "vmName" in line][0]
 
         vm_status = self.__get_ha_status()
 
