@@ -25,6 +25,7 @@ SHELL := /bin/bash
 
 SUBDIRS = \
 	src \
+	rwtab \
 	recipe
 
 EXTRA_DIST = \
