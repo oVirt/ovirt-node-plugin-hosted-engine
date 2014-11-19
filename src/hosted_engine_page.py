@@ -120,9 +120,10 @@ class Plugin(plugins.NodePlugin):
         ws = [ui.Header("header[0]", "Hosted Engine Setup"),
               ui.KeywordLabel("hosted_engine.enabled",
                               ("Hosted Engine: ")),
-              ui.KeywordLabel("hosted_engine.vm",
-                              ("Engine VM: ")),
+
               ui.Divider("divider[0]"),
+              ui.KeywordLabel("hosted_engine.vm",
+                              ("Engine VM Name: ")),
               ui.KeywordLabel("hosted_engine.status",
                               ("Engine Status: ")),
 
