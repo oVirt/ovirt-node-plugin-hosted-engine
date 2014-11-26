@@ -402,6 +402,7 @@ class DownloadThread(threading.Thread):
             os.unlink(path)
 
         else:
+            self.he_plugin.write_config(os.path.basename(path))
             self.he_plugin._configured = True
             self.he_plugin.show_dialog()
 
