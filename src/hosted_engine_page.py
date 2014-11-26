@@ -127,7 +127,7 @@ class Plugin(plugins.NodePlugin):
         pass
 
     def on_merge(self, effective_changes):
-        self._configure_ISO_OVA = False
+        self._configured = False
         changes = Changeset(self.pending_changes(False))
         effective_model = Changeset(self.model())
         effective_model.update(effective_changes)
@@ -164,7 +164,7 @@ class Plugin(plugins.NodePlugin):
 
             if pxe:
                 self.write_config(pxe=True)
-                self._configure_ISO_OVA = True
+                self._configured = True
                 self.show_dialog()
 
             else:
@@ -175,7 +175,7 @@ class Plugin(plugins.NodePlugin):
                     # The image is already downloaded. Use that.
                     self.write_config(imagepath=os.path.basename(imagepath))
 
-                    self._configure_ISO_OVA = True
+                    self._configured = True
                     self.show_dialog()
 
                 else:
@@ -207,7 +207,7 @@ class Plugin(plugins.NodePlugin):
 
         if self.application.current_plugin() is self:
             try:
-                if self._configure_ISO_OVA:
+                if self._configured:
                     utils.console.writeln("Beginning Hosted Engine Setup ...")
                     txt = "Setup will be ran with screen enabled that can be "
                     txt += "reconnected in the event of a timeout or "
@@ -402,7 +402,7 @@ class DownloadThread(threading.Thread):
             os.unlink(path)
 
         else:
-            self.he_plugin._configure_ISO_OVA = True
+            self.he_plugin._configured = True
             self.he_plugin.show_dialog()
 
 
