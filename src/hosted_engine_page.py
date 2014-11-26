@@ -81,7 +81,7 @@ class Plugin(plugins.NodePlugin):
             "hosted_engine.status": vm_status,
             "hosted_engine.diskpath": cfg["imagepath"] or "",
             "hosted_engine.display_message": "",
-            "hosted_engine.pxe": cfg["pxe"] or False}
+            "hosted_engine.pxe": cfg["pxe"]}
 
         self._model.update(model)
 
@@ -422,3 +422,8 @@ class HostedEngine(NodeConfigFileSection):
         (valid.Boolean()(pxe))
         return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath,
                 "OVIRT_HOSTED_ENGINE_PXE": "yes" if pxe else None}
+
+    def retrieve(self):
+        cfg = dict(NodeConfigFileSection.retrieve(self))
+        cfg.update({"pxe": True if cfg["pxe"] == "yes" else False})
+        return cfg
