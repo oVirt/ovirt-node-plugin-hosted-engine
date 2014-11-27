@@ -304,8 +304,7 @@ class Plugin(plugins.NodePlugin):
                     host = v['hostname']
 
         if not host:
-            vm_status = "Engine is down. Please check " + \
-                        "'hosted-engine --vm-status'"
+            vm_status = "Engine is down or not deployed."
         else:
             vm_status = "Engine is running on {host}".format(host=host)
 
