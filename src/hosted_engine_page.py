@@ -21,7 +21,7 @@
 
 from urlparse import urlparse
 
-from ovirt.node import plugins, ui, utils, valid, log
+from ovirt.node import plugins, ui, utils, valid
 from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
 from ovirt.node.utils.fs import File
@@ -34,43 +34,14 @@ import tempfile
 import threading
 import time
 
-VM_CONF_PATH = "/etc/ovirt-hosted-engine/vm.conf"
-HOSTED_ENGINE_SETUP_DIR = "/data/ovirt-hosted-engine-setup"
 """
 Configure Hosted Engine
 """
 
 
-LOGGER = log.getLogger(__name__)
-
-
-def get_hosted_cfg(imagepath, pxe):
-    ova = False
-    boot = None
-    txt = "[environment:default]\n"
-    if imagepath.endswith(".iso"):
-        boot = "cdrom"
-        txt += "OVEHOSTED_VM/vmCDRom=str:%s\n" % \
-               os.path.join(HOSTED_ENGINE_SETUP_DIR, imagepath)
-    elif imagepath.endswith(".gz"):
-        boot = "disk"
-        ova = True
-        ova_path = os.path.join(HOSTED_ENGINE_SETUP_DIR,
-                                os.path.basename(imagepath))
-    elif pxe:
-        boot = "pxe"
-    if boot:
-        txt += "OVEHOSTED_VM/vmBoot=str:%s\n" % boot
-    else:
-        txt += "OVEHOSTED_VM/vmBoot=none:None\n"
-    if ova:
-        txt += "OVEHOSTED_VM/ovfArchive=str:%s\n" % ova_path
-    else:
-        txt += "OVEHOSTED_VM/ovfArchive=none:None\n"
-    return txt
-
-
 class Plugin(plugins.NodePlugin):
+    VM_CONF_PATH = "/etc/ovirt-hosted-engine/vm.conf"
+    HOSTED_ENGINE_SETUP_DIR = "/data/ovirt-hosted-engine-setup"
     _server = None
     _show_progressbar = False
     _model = {}
@@ -91,12 +62,12 @@ class Plugin(plugins.NodePlugin):
     def model(self):
         cfg = HostedEngine().retrieve()
 
-        configured = os.path.exists(VM_CONF_PATH)
+        configured = os.path.exists(self.VM_CONF_PATH)
 
         conf_status = "Configured" if configured else "Not configured"
         vm = None
         if conf_status == "Configured":
-            f = File(VM_CONF_PATH)
+            f = File(self.VM_CONF_PATH)
             if "vmName" in f.read():
                 vm = [line.strip().split("=")[1] for line in f
                       if "vmName" in line][0]
@@ -157,7 +128,6 @@ class Plugin(plugins.NodePlugin):
 
     def on_merge(self, effective_changes):
         self._configure_ISO_OVA = False
-        self.logger.info("Saving Hosted Engine Config")
         changes = Changeset(self.pending_changes(False))
         effective_model = Changeset(self.model())
         effective_model.update(effective_changes)
@@ -172,39 +142,56 @@ class Plugin(plugins.NodePlugin):
 
             imagepath = effective_model["hosted_engine.diskpath"]
             pxe = effective_model["hosted_engine.pxe"]
-            if not os.path.exists(HOSTED_ENGINE_SETUP_DIR):
-                os.makedirs(HOSTED_ENGINE_SETUP_DIR)
-            localpath = os.path.join(HOSTED_ENGINE_SETUP_DIR,
-                                     os.path.basename(imagepath))
-            temp_fd, self.temp_cfg_file = tempfile.mkstemp()
-            os.close(temp_fd)
 
+            # Check whether we have unclear conditions
             if not imagepath and not pxe:
                 self._model['display_message'] = "\n\nYou must enter a URL" \
                     " or choose PXE to install the Engine VM"
                 self.show_dialog()
                 return self.ui_content()
-
-            path_parsed = urlparse(imagepath)
-            if not path_parsed.scheme:
-                self._model['display_message'] = "\nCouldn't parse URL. " +\
-                                                 "please check it manually."
+            elif imagepath and pxe:
+                self._model['display_message'] = "\n\nPlease choose either " \
+                                                 "PXE or an image to " \
+                                                 "retrieve, not both"
                 self.show_dialog()
-            elif os.path.exists(localpath):
-                hosted_cfg = get_hosted_cfg(os.path.basename(imagepath), pxe)
-                with open(self.temp_cfg_file, "w") as f:
-                    f.write(hosted_cfg)
-                self.logger.info(self.temp_cfg_file)
-                self.logger.info(hosted_cfg)
-                self.logger.debug("Starting drop to setup")
-                utils.console.writeln("Beginning Hosted Engine Setup ...")
+                return self.ui_content()
+
+            if not os.path.exists(self.HOSTED_ENGINE_SETUP_DIR):
+                os.makedirs(self.HOSTED_ENGINE_SETUP_DIR)
+
+            temp_fd, self.temp_cfg_file = tempfile.mkstemp()
+            os.close(temp_fd)
+
+            if pxe:
+                self.write_config(pxe=True)
                 self._configure_ISO_OVA = True
                 self.show_dialog()
-            elif path_parsed.scheme == 'http' or \
-                    path_parsed.scheme == 'https':
-                self._show_progressbar = True
-                self.application.show(self.ui_content())
-                self._image_retrieve(imagepath, HOSTED_ENGINE_SETUP_DIR)
+
+            else:
+                localpath = os.path.join(self.HOSTED_ENGINE_SETUP_DIR,
+                                         os.path.basename(imagepath))
+
+                if os.path.exists(localpath):
+                    # The image is already downloaded. Use that.
+                    self.write_config(imagepath=os.path.basename(imagepath))
+
+                    self._configure_ISO_OVA = True
+                    self.show_dialog()
+
+                else:
+                    path_parsed = urlparse(imagepath)
+
+                    if not path_parsed.scheme:
+                        self._model['display_message'] = ("\nCouldn't parse "
+                                                          "URL. please check "
+                                                          "it manually.")
+
+                    elif path_parsed.scheme == 'http' or \
+                            path_parsed.scheme == 'https':
+                        self._show_progressbar = True
+                        self.application.show(self.ui_content())
+                        self._image_retrieve(imagepath,
+                                             self.HOSTED_ENGINE_SETUP_DIR)
 
         return self.ui_content()
 
@@ -217,9 +204,11 @@ class Plugin(plugins.NodePlugin):
         def return_ok(dialog, changes):
             with self.application.ui.suspended():
                 open_console()
+
         if self.application.current_plugin() is self:
             try:
                 if self._configure_ISO_OVA:
+                    utils.console.writeln("Beginning Hosted Engine Setup ...")
                     txt = "Setup will be ran with screen enabled that can be "
                     txt += "reconnected in the event of a timeout or "
                     txt += "connection failure.\n"
@@ -253,6 +242,46 @@ class Plugin(plugins.NodePlugin):
     def _image_retrieve(self, imagepath, setup_dir):
         _downloader = DownloadThread(self, imagepath, setup_dir)
         _downloader.start()
+
+    def write_config(self, imagepath=None, pxe=False):
+        f = File(self.temp_cfg_file)
+
+        def write(line):
+            f.write("{line}\n".format(line=line), "a")
+
+        self.logger.info("Saving Hosted Engine Config")
+
+        ova_path = None
+        boot = None
+        write("[environment:default]")
+
+        if pxe:
+            boot = "pxe"
+
+        if imagepath:
+            if imagepath.endswith(".iso"):
+                boot = "cdrom"
+                write("OVEHOSTED_VM/vmCDRom=str:{imagepath}".format(
+                    imagepath=os.path.join(
+                        self.HOSTED_ENGINE_SETUP_DIR, imagepath
+                    )
+                ))
+            elif imagepath.endswith(".gz"):
+                boot = "disk"
+                ova_path = os.path.join(self.HOSTED_ENGINE_SETUP_DIR,
+                                        os.path.basename(imagepath))
+
+        write("OVEHOSTED_VM/vmBoot=str:{boot}".format(boot=boot))
+
+        ovastr = "str:{ova_path}".format(ova_path=ova_path) if ova_path else \
+                 "none:None"
+        write("OVEHOSTED_VM/ovfArchive={ovastr}".format(ovastr=ovastr))
+
+        self.logger.info("Wrote hosted engine install configuration to "
+                         "{cfg}".format(cfg=self.temp_cfg_file))
+        self.logger.debug("Wrote config as:")
+        for line in f:
+            self.logger.debug("{line}".format(line=line.strip()))
 
     def __get_ha_status(self):
         def dict_from_string(string):
