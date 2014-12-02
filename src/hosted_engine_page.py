@@ -71,8 +71,9 @@ class Plugin(plugins.NodePlugin):
             if "vmName" in f.read():
                 vm = [line.strip().split("=")[1] for line in f
                       if "vmName" in line][0]
-
-        vm_status = self.__get_ha_status()
+            vm_status = self.__get_ha_status()
+        else:
+            vm_status = "Hosted engine not configured"
 
         model = {
             "hosted_engine.enabled": str(conf_status),
@@ -294,6 +295,7 @@ class Plugin(plugins.NodePlugin):
             vm_status = ha_cli.get_all_host_stats()
         except:
             vm_status = "Cannot connect to HA daemon, please check the logs"
+            return vm_status
         else:
             for v in vm_status.values():
                 if dict_from_string(v['engine-status'])['health'] == "good":
