@@ -255,6 +255,14 @@ class Plugin(plugins.NodePlugin):
         _downloader = DownloadThread(self, imagepath, setup_dir)
         _downloader.start()
 
+    def magic_type(self, imagepath, type="gzip"):
+        magic_headers = { "gzip": "\x1f\x8b\x08" }
+
+        with open(imagepath) as f:
+            magic = f.read(len(magic_headers[type]))
+
+        return True if magic == magic_headers[type] else False
+
     def write_config(self, imagepath=None, pxe=False):
         f = File(self.temp_cfg_file)
 
@@ -271,17 +279,20 @@ class Plugin(plugins.NodePlugin):
             boot = "pxe"
 
         if imagepath:
+            imagepath = os.path.join(self.HOSTED_ENGINE_SETUP_DIR,
+                                     imagepath.lstrip("/"))
             if imagepath.endswith(".iso"):
                 boot = "cdrom"
                 write("OVEHOSTED_VM/vmCDRom=str:{imagepath}".format(
-                    imagepath=os.path.join(
-                        self.HOSTED_ENGINE_SETUP_DIR, imagepath
-                    )
-                ))
-            elif imagepath.endswith(".gz"):
-                boot = "disk"
-                ova_path = os.path.join(self.HOSTED_ENGINE_SETUP_DIR,
-                                        os.path.basename(imagepath))
+                    imagepath=imagepath))
+            else:
+                imagetype = "gzip" if self.magic_type(imagepath) else "Unknown"
+                if imagetype == "gzip":
+                    boot = "disk"
+                    ova_path = imagepath
+                else:
+                    raise RuntimeError("Downloaded image is neither an OVA nor "
+                                       "an ISO, can't use it")
 
         write("OVEHOSTED_VM/vmBoot=str:{boot}".format(boot=boot))
 
