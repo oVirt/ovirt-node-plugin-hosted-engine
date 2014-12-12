@@ -208,6 +208,15 @@ class Plugin(plugins.NodePlugin):
 
         if self.application.current_plugin() is self:
             try:
+                # Clear out the counters once we're done, and hide the progress
+                # bar
+                self.widgets["download.progress"].current(0)
+                self.widgets["download.status"].text("")
+                self._show_progressbar = False
+
+                self._model["download.progress"] = 0
+                self._model["download.status"] = ""
+
                 if self._install_ready:
                     utils.console.writeln("Beginning Hosted Engine Setup ...")
                     txt = "Setup will be ran with screen enabled that can be "
@@ -239,6 +248,8 @@ class Plugin(plugins.NodePlugin):
                 # Error when the UI is not running
                 self.logger.info("Exception on TUI!", exc_info=True)
                 open_console()
+
+        self.application.show(self.ui_content())
 
     def _image_retrieve(self, imagepath, setup_dir):
         _downloader = DownloadThread(self, imagepath, setup_dir)
