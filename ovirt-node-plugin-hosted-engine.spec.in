@@ -62,5 +62,11 @@ make install DESTDIR=%{buildroot}
 %{recipe_root}
 
 %changelog
+* Thu Feb 26 2015 Douglas Schilling Landgraf <dougsland@redhat.com> 0.2.2
+- OVAs do not end with .gz, check magic numbers instead
+- Clear the download progressbar and text once we're finished
+- _configured is a bad variable name. Use _install_ready
+- Add a reasonable .gitignore
+
 * Tue May 27 2014 Joey Boggs <jboggs@redhat.com> 0.0.1
 - initial commit
