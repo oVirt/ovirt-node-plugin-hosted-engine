@@ -261,7 +261,7 @@ class Plugin(plugins.NodePlugin):
         _downloader.start()
 
     def magic_type(self, imagepath, type="gzip"):
-        magic_headers = { "gzip": "\x1f\x8b\x08" }
+        magic_headers = {"gzip": "\x1f\x8b\x08"}
 
         with open(imagepath) as f:
             magic = f.read(len(magic_headers[type]))
@@ -296,8 +296,8 @@ class Plugin(plugins.NodePlugin):
                     boot = "disk"
                     ova_path = imagepath
                 else:
-                    raise RuntimeError("Downloaded image is neither an OVA nor "
-                                       "an ISO, can't use it")
+                    raise RuntimeError("Downloaded image is neither an OVA nor"
+                                       " an ISO, can't use it")
 
         write("OVEHOSTED_VM/vmBoot=str:{boot}".format(boot=boot))
 
@@ -448,9 +448,8 @@ class HostedEngine(NodeConfigFileSection):
         (valid.Empty() | valid.Text())(imagepath)
         (valid.Boolean()(pxe))
         return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath,
-                "OVIRT_HOSTED_ENGINE_PXE": "yes" if pxe else None}
-                "OVIRT_HOSTED_ENGINE_FORCE_ENABLE":
-                "yes" if force_enable else None}
+                "OVIRT_HOSTED_ENGINE_PXE": "yes" if pxe else None,
+                "OVIRT_HOSTED_ENGINE_FORCE_ENABLE": "yes" if force_enable else None}
 
     def retrieve(self):
         cfg = dict(NodeConfigFileSection.retrieve(self))
