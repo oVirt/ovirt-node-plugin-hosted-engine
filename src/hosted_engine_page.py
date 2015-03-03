@@ -55,6 +55,11 @@ class Plugin(plugins.NodePlugin):
     def rank(self):
         return 110
 
+    def has_ui(self):
+        is_el6 = utils.system.SystemRelease().is_el()
+        has_override = HostedEngine().retrieve()["force_enable"]
+        return is_el6 or has_override
+
     def update(self, imagepath):
         (valid.Empty() | valid.Text())(imagepath)
         return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath}
@@ -433,18 +438,22 @@ class DownloadThread(threading.Thread):
 class HostedEngine(NodeConfigFileSection):
     keys = ("OVIRT_HOSTED_ENGINE_IMAGE_PATH",
             "OVIRT_HOSTED_ENGINE_PXE",
+            "OVIRT_HOSTED_ENGINE_FORCE_ENABLE",
             )
 
     @NodeConfigFileSection.map_and_update_defaults_decorator
-    def update(self, imagepath, pxe):
+    def update(self, imagepath, pxe, force_enable=None):
         if not isinstance(pxe, bool):
             pxe = True if pxe.lower() == 'true' else False
         (valid.Empty() | valid.Text())(imagepath)
         (valid.Boolean()(pxe))
         return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath,
                 "OVIRT_HOSTED_ENGINE_PXE": "yes" if pxe else None}
+                "OVIRT_HOSTED_ENGINE_FORCE_ENABLE":
+                "yes" if force_enable else None}
 
     def retrieve(self):
         cfg = dict(NodeConfigFileSection.retrieve(self))
         cfg.update({"pxe": True if cfg["pxe"] == "yes" else False})
+        cfg.update({"force_enable": True if cfg["force_enable"] == "yes" else False})
         return cfg
