@@ -56,7 +56,7 @@ class Plugin(plugins.NodePlugin):
         return 110
 
     def has_ui(self):
-        is_el6 = utils.system.SystemRelease().is_el()
+        is_el6 = utils.system.SystemRelease().is_max_el(6)
         has_override = HostedEngine().retrieve()["force_enable"]
         return is_el6 or has_override
 
