@@ -144,7 +144,8 @@ class Plugin(plugins.NodePlugin):
         engine_keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
 
         if effective_changes.contains_any(["action.setupengine"]):
-            HostedEngine().update(*effective_model.values_for(engine_keys))
+            args = tuple(effective_model.values_for(engine_keys)) + (None,)
+            HostedEngine().update(*args)
 
             imagepath = effective_model["hosted_engine.diskpath"]
             pxe = effective_model["hosted_engine.pxe"]
