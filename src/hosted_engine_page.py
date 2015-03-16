@@ -134,6 +134,7 @@ class Plugin(plugins.NodePlugin):
 
     def on_merge(self, effective_changes):
         self._install_ready = False
+        self.temp_cfg_file = False
         changes = Changeset(self.pending_changes(False))
         effective_model = Changeset(self.model())
         effective_model.update(effective_changes)
@@ -204,9 +205,15 @@ class Plugin(plugins.NodePlugin):
 
     def show_dialog(self):
         def open_console():
-            utils.process.call("reset; screen ovirt-hosted-engine-setup" +
-                               " --config-append=%s" % self.temp_cfg_file,
-                               shell=True)
+            if self.temp_cfg_file:
+                utils.process.call("reset; screen ovirt-hosted-engine-setup" +
+                                   " --config-append=%s" % self.temp_cfg_file,
+                                   shell=True)
+            else:
+                self.logger.error("Cannot trigger ovirt-hosted-engine-setup" +
+                                  " because the configuration file was not " +
+                                  "generated, please check the location " +
+                                  "referenced in /var/log/ovirt-node.log")
 
         def return_ok(dialog, changes):
             with self.application.ui.suspended():
@@ -214,14 +221,17 @@ class Plugin(plugins.NodePlugin):
 
         if self.application.current_plugin() is self:
             try:
-                # Clear out the counters once we're done, and hide the progress
-                # bar
-                self.widgets["download.progress"].current(0)
-                self.widgets["download.status"].text("")
-                self._show_progressbar = False
+                # if show_progressbar is not set, the download process has
+                # never started or finished
+                if self._show_progressbar:
+                    # Clear out the counters once we're done, and hide the progress
+                    # bar
+                    self.widgets["download.progress"].current(0)
+                    self.widgets["download.status"].text("")
+                    self._show_progressbar = False
 
-                self._model["download.progress"] = 0
-                self._model["download.status"] = ""
+                    self._model["download.progress"] = 0
+                    self._model["download.status"] = ""
 
                 if self._install_ready:
                     utils.console.writeln("Beginning Hosted Engine Setup ...")
