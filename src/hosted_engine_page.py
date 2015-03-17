@@ -383,7 +383,12 @@ class DownloadThread(threading.Thread):
         with open(path, 'wb') as f:
             started = time.time()
             try:
-                r = requests.get(self.url, stream=True)
+                s = requests.Session()
+
+                # Don't let apache transparently deflate gzips
+                del s.headers["Accept-Encoding"]
+
+                r = s.get(self.url, stream=True)
                 if r.status_code != 200:
                     self.he_plugin._model['display_message'] = \
                         "\n\nCannot download the file: HTTP error code %s" % \
