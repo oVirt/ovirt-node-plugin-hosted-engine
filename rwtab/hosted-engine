@@ -1,2 +1,3 @@
 # hosted-engine paths for read and write
 files /var/lib/ovirt-hosted-engine-setup
+files /var/lib/ovirt-hosted-engine-ha
