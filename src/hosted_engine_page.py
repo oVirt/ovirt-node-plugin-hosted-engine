@@ -27,6 +27,7 @@ from ovirt.node.config.defaults import NodeConfigFileSection
 from ovirt.node.utils.fs import File
 from ovirt_hosted_engine_ha.client import client
 
+import config
 import json
 import os
 import requests
@@ -161,6 +162,9 @@ class Plugin(plugins.NodePlugin):
 
             if not os.path.exists(self.HOSTED_ENGINE_SETUP_DIR):
                 os.makedirs(self.HOSTED_ENGINE_SETUP_DIR)
+
+            if not os.path.exists(config.HOSTED_ENGINE_TEMPDIR):
+                os.makedirs(config.HOSTED_ENGINE_TEMPDIR)
 
             temp_fd, self.temp_cfg_file = tempfile.mkstemp()
             os.close(temp_fd)
@@ -310,6 +314,9 @@ class Plugin(plugins.NodePlugin):
         ovastr = "str:{ova_path}".format(ova_path=ova_path) if ova_path else \
                  "none:None"
         write("OVEHOSTED_VM/ovfArchive={ovastr}".format(ovastr=ovastr))
+
+        write("OVEHOSTED_CORE/tempDir=str:{tmpdirHE}".format(
+              tmpdirHE=config.HOSTED_ENGINE_TEMPDIR))
 
         self.logger.info("Wrote hosted engine install configuration to "
                          "{cfg}".format(cfg=self.temp_cfg_file))
