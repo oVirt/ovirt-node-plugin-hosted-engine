@@ -28,6 +28,7 @@ PACKAGE_RPM_VERSION="VERSION_NUMBER"
 PACKAGE_RPM_RELEASE="0.0.$(echo VERSION_SUFFIX | sed 's/^_//')"
 AC_SUBST([PACKAGE_RPM_VERSION])
 AC_SUBST([PACKAGE_RPM_RELEASE])
+AC_SUBST([HE_TMP_DIR], ['/data/ovirt-hosted-engine-setup/tmp-setup'])
 AC_SUBST([PLUGINNAME], ['oVirt Node Hosted Engine Plugin'])
 
 AM_INIT_AUTOMAKE([-Wall -Werror foreign -Wno-portability tar-pax])
@@ -39,6 +40,7 @@ AM_PATH_PYTHON
 
 AC_CONFIG_FILES([Makefile
                 src/Makefile
+                src/config.py
                 recipe/Makefile
                 rwtab/Makefile
                 ovirt-node-plugin-hosted-engine.spec])
