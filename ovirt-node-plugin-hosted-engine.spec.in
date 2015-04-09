@@ -24,6 +24,7 @@ Summary:        Kickstarts for building oVirt Node isos including %{name}
 Group:          Applications/System
 Requires:       ovirt-node-recipe >= 2.6.0
 
+%{!?_licensedir:%global license %%doc}
 
 %post
 chkconfig ovirt-ha-agent on
@@ -54,11 +55,13 @@ make install DESTDIR=%{buildroot}
 
 
 %files
+%license COPYING
 %{_sysconfdir}/rwtab.d/hosted-engine
 %{python_sitelib}/ovirt/node/setup/hostedengine
 #%{_sysconfdir}/ovirt-plugins.d
 
 %files recipe
+%license COPYING
 %{recipe_root}
 
 %changelog
