@@ -210,7 +210,8 @@ class Plugin(plugins.NodePlugin):
     def show_dialog(self):
         def open_console():
             if self.temp_cfg_file:
-                utils.process.call("reset; screen ovirt-hosted-engine-setup" +
+                utils.process.call("reset; screen " +
+                                   "ovirt-node-hosted-engine-setup" +
                                    " --config-append=%s" % self.temp_cfg_file,
                                    shell=True)
             else:
@@ -228,8 +229,8 @@ class Plugin(plugins.NodePlugin):
                 # if show_progressbar is not set, the download process has
                 # never started or finished
                 if self._show_progressbar:
-                    # Clear out the counters once we're done, and hide the progress
-                    # bar
+                    # Clear out the counters once we're done, and hide the
+                    # progress bar
                     self.widgets["download.progress"].current(0)
                     self.widgets["download.status"].text("")
                     self._show_progressbar = False
@@ -472,10 +473,12 @@ class HostedEngine(NodeConfigFileSection):
         (valid.Boolean()(pxe))
         return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath,
                 "OVIRT_HOSTED_ENGINE_PXE": "yes" if pxe else None,
-                "OVIRT_HOSTED_ENGINE_FORCE_ENABLE": "yes" if force_enable else None}
+                "OVIRT_HOSTED_ENGINE_FORCE_ENABLE": "yes" if force_enable
+                else None}
 
     def retrieve(self):
         cfg = dict(NodeConfigFileSection.retrieve(self))
         cfg.update({"pxe": True if cfg["pxe"] == "yes" else False})
-        cfg.update({"force_enable": True if cfg["force_enable"] == "yes" else False})
+        cfg.update({"force_enable": True if cfg["force_enable"] == "yes"
+                    else False})
         return cfg

@@ -43,5 +43,6 @@ AC_CONFIG_FILES([Makefile
                 src/config.py
                 recipe/Makefile
                 rwtab/Makefile
+                scripts/Makefile
                 ovirt-node-plugin-hosted-engine.spec])
 AC_OUTPUT

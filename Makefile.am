@@ -26,7 +26,8 @@ SHELL := /bin/bash
 SUBDIRS = \
 	src \
 	rwtab \
-	recipe
+	recipe \
+	scripts
 
 EXTRA_DIST = \
   ovirt-node-plugin-hosted-engine.spec \
