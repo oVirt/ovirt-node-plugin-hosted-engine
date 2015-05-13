@@ -46,6 +46,7 @@ class Plugin(plugins.NodePlugin):
     _server = None
     _show_progressbar = False
     _model = {}
+    _configured = False
 
     def __init__(self, application):
         super(Plugin, self).__init__(application)
@@ -68,9 +69,9 @@ class Plugin(plugins.NodePlugin):
     def model(self):
         cfg = HostedEngine().retrieve()
 
-        configured = os.path.exists(self.VM_CONF_PATH)
+        self._configured = os.path.exists(self.VM_CONF_PATH)
 
-        conf_status = "Configured" if configured else "Not configured"
+        conf_status = "Configured" if self._configured else "Not configured"
         vm = None
         if conf_status == "Configured":
             f = File(self.VM_CONF_PATH)
@@ -99,20 +100,20 @@ class Plugin(plugins.NodePlugin):
     def ui_content(self):
         ws = [ui.Header("header[0]", "Hosted Engine Setup"),
               ui.KeywordLabel("hosted_engine.enabled",
-                              ("Hosted Engine: ")),
+                              ("Hosted Engine: "))]
 
-              ui.Divider("divider[0]"),
-              ui.KeywordLabel("hosted_engine.vm",
-                              ("Engine VM Name: ")),
-              ui.KeywordLabel("hosted_engine.status",
-                              ("Engine Status: ")),
+        if self._configured:
+            ws.extend([ui.Divider("divider[0]"),
+                       ui.KeywordLabel("hosted_engine.vm",
+                                       ("Engine VM Name: ")),
+                       ui.KeywordLabel("hosted_engine.status",
+                                       ("Engine Status: ")),
+                       ui.Button("button.status", "Hosted Engine VM status"),
+                       ui.Button("button.maintenance",
+                                 "Set Hosted Engine maintenance")])
 
-              ui.Divider("divider[0]"),
-              ui.Entry("hosted_engine.diskpath",
-                       "Engine ISO/OVA URL for download:"),
-              ui.Divider("divider[1]"),
-              ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM")
-              ]
+        ws.extend([ui.Divider("divider.button"),
+                   ui.Button("button.dialog", "Deploy Hosted Engine")])
 
         if self._show_progressbar:
             if "progress" in self._model:
@@ -124,9 +125,6 @@ class Plugin(plugins.NodePlugin):
             ws.append(ui.KeywordLabel("download.status", ""))
 
         page = ui.Page("page", ws)
-        page.buttons = [ui.Button("action.setupengine",
-                                  "Setup Hosted Engine")
-                        ]
         self.widgets.add(page)
         return page
 
@@ -134,8 +132,12 @@ class Plugin(plugins.NodePlugin):
         pass
 
     def on_merge(self, effective_changes):
+        def close_dialog():
+            self._dialog.close()
+            self._dialog = None
         self._install_ready = False
         self.temp_cfg_file = False
+
         changes = Changeset(self.pending_changes(False))
         effective_model = Changeset(self.model())
         effective_model.update(effective_changes)
@@ -143,9 +145,42 @@ class Plugin(plugins.NodePlugin):
         self.logger.debug("Changes: %s" % changes)
         self.logger.debug("Effective Model: %s" % effective_model)
 
+        if "button.dialog" in effective_changes:
+            self._dialog = DeployDialog("Deploy Hosted Engine", self)
+            self.widgets.add(self._dialog)
+            return self._dialog
+
+        if "button.status" in effective_changes:
+            contents = utils.process.check_output(["hosted-engine",
+                                                   "--vm-status"],
+                                                  stderr=utils.process.STDOUT)
+            return ui.TextViewDialog("output.dialog", "Hosted Engine VM "
+                                     "Status", contents)
+
+        if "button.maintenance" in effective_changes:
+            self._dialog = MaintenanceDialog("Hosted Engine Maintenance", self)
+            self.widgets.add(self._dialog)
+            return self._dialog
+
+        if "maintenance.confirm" in effective_changes:
+            close_dialog()
+            if "maintenance.level" in effective_changes:
+                level = effective_changes["maintenance.level"]
+                try:
+                    utils.process.check_call(["hosted-engine",
+                                              "--set-maintenance",
+                                              "--mode=%s" % level])
+                except:
+                    self.logger.exception("Couldn't set maintenance level "
+                                          "to %s" % level, exc_info=True)
+                    raise RuntimeError("Couldn't set maintenance level to "
+                                       "%s" % level)
+
         engine_keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
 
-        if effective_changes.contains_any(["action.setupengine"]):
+        if effective_changes.contains_any(["deploy.confirm"]):
+            close_dialog()
+
             args = tuple(effective_model.values_for(engine_keys)) + (None,)
             HostedEngine().update(*args)
 
@@ -457,6 +492,64 @@ class DownloadThread(threading.Thread):
             self.he_plugin.write_config(os.path.basename(path))
             self.he_plugin._install_ready = True
             self.he_plugin.show_dialog()
+
+
+class DeployDialog(ui.Dialog):
+    """A dialog to input deployment information
+    """
+    def __init__(self, title, plugin):
+        self.keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
+
+        def clear_invalid(dialog, changes):
+            [plugin.stash_change(prefix) for prefix in self.keys]
+
+        entries = [ui.Entry("hosted_engine.diskpath",
+                            "Engine ISO/OVA URL for download:"),
+                   ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM")]
+        children = [ui.Label("label[0]", "Please provide details for "
+                             "deployment of hosted engine"),
+                    ui.Divider("divider[0]")]
+        children.extend(entries)
+        super(DeployDialog, self).__init__("deploy.dialog", title, children)
+        self.buttons = [ui.SaveButton("deploy.confirm", "Deploy"),
+                        ui.CloseButton("deploy.close", "Cancel")]
+
+        b = plugins.UIElements(self.buttons)
+        b["deploy.close"].on_activate.clear()
+        b["deploy.close"].on_activate.connect(ui.CloseAction())
+        b["deploy.close"].on_activate.connect(clear_invalid)
+
+
+class MaintenanceDialog(ui.Dialog):
+    """A dialog to set HE maintenance level
+    """
+
+    states = [("global", "Global"),
+              ("local", "Local"),
+              ("none", "None")]
+
+    def __init__(self, title, plugin):
+        self.keys = ["maintenance.level"]
+
+        def clear_invalid(dialog, changes):
+            [plugin.stash_change(prefix) for prefix in self.keys]
+
+        entries = [ui.Options("maintenance.level", "Maintenance Level",
+                              self.states)]
+        children = [ui.Divider("divider.options"),
+                    ui.Label("label[0]", "Please select the maintenance "
+                             "level"),
+                    ui.Divider("divider[0]")]
+        children.extend(entries)
+        super(MaintenanceDialog, self).__init__(
+            "maintenance.dialog", title, children)
+        self.buttons = [ui.SaveButton("maintenance.confirm", "Set"),
+                        ui.CloseButton("maintenance.close", "Cancel")]
+
+        b = plugins.UIElements(self.buttons)
+        b["maintenance.close"].on_activate.clear()
+        b["maintenance.close"].on_activate.connect(ui.CloseAction())
+        b["maintenance.close"].on_activate.connect(clear_invalid)
 
 
 class HostedEngine(NodeConfigFileSection):
