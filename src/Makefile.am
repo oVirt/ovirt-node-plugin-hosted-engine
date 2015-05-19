@@ -20,6 +20,7 @@ nodeconfdir = $(sysconfdir)/sysconfig
 pyovirtsetupdir = $(pythondir)/ovirt/node/setup/hostedengine
 pyovirtsetup_PYTHON = \
   hosted_engine_page.py \
+  hosted_engine_model.py \
   __init__.py \
   config.py
 
@@ -30,7 +31,7 @@ check-local-pep8:
 	find $(srcdir) -name \*.py | sort | uniq | xargs pep8 --repeat --statistics --count
 
 check-local-doctest:
-	find $(srcdir) -name \*.py | sort | uniq | xargs python -m doctest -v
+	find $(srcdir) -name \*.py | sort | uniq | xargs nose -q --with-doctest
 
 clean-local:
 	rm -f config.py

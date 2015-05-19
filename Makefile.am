@@ -18,7 +18,7 @@
 OVIRT_CACHE_DIR	?= $(HOME)/ovirt-cache
 
 PYTHONSOURCES = \
-  $(shell find scripts -name \*.py)
+  $(shell find src -name \*.py)
 
 SHELL := /bin/bash
 
@@ -91,7 +91,7 @@ doctests:
 	@for M in $(PYTHONSOURCES); \
 	do \
 		echo Doctest on "$$M"; \
-		PYTHONPATH=. python -m doctest $$M || exit 1; \
+		PYTHONPATH=. nosetests -q --with-doctest $$M || exit 1; \
 	done
 
 pep8:

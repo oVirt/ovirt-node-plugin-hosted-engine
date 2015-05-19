@@ -16,3 +16,5 @@
 # also available at http://www.gnu.org/copyleft/gpl.html.
 
 HOSTED_ENGINE_TEMPDIR = '@HE_TMP_DIR@'
+VM_CONF_PATH = "/etc/ovirt-hosted-engine/vm.conf"
+HOSTED_ENGINE_SETUP_DIR = "/data/ovirt-hosted-engine-setup"

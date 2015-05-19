@@ -42,6 +42,7 @@ Provides kickstart files for generating an oVirt Node ISO image containing
 %{python_sitelib}/ovirt/node/setup/hostedengine/__init__.py*
 %{python_sitelib}/ovirt/node/setup/hostedengine/config.py*
 %{python_sitelib}/ovirt/node/setup/hostedengine/hosted_engine_page.py*
+%{python_sitelib}/ovirt/node/setup/hostedengine/hosted_engine_model.py*
 
 %prep
 %setup -q -n "%{name}-%{package_version}"
@@ -67,5 +68,8 @@ make install DESTDIR=%{buildroot}
 %{recipe_root}
 
 %changelog
+* Tue May 18 2015 Ryan Barry <rbarry@redhat.com> 0.0.2
+- Refactor the page, move model to another file
+
 * Tue May 27 2014 Joey Boggs <jboggs@redhat.com> 0.0.1
 - initial commit

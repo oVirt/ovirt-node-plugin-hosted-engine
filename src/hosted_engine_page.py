@@ -22,14 +22,16 @@
 from urlparse import urlparse
 from ovirt.node import plugins, ui, utils, valid
 from ovirt.node.plugins import Changeset
-from ovirt.node.config.defaults import NodeConfigFileSection
-from ovirt.node.utils.fs import File
+from ovirt.node.utils import console
+from ovirt.node.utils.fs import Config, File
 from ovirt_hosted_engine_ha.client import client
+from . import config
+from .hosted_engine_model import HostedEngine
 
-import config
 import json
 import os
 import requests
+import sys
 import tempfile
 import threading
 import time
@@ -40,12 +42,11 @@ Configure Hosted Engine
 
 
 class Plugin(plugins.NodePlugin):
-    VM_CONF_PATH = "/etc/ovirt-hosted-engine/vm.conf"
-    HOSTED_ENGINE_SETUP_DIR = "/data/ovirt-hosted-engine-setup"
     _server = None
     _show_progressbar = False
     _model = {}
     _configured = False
+    _install_ready = False
 
     def __init__(self, application):
         super(Plugin, self).__init__(application)
@@ -63,12 +64,12 @@ class Plugin(plugins.NodePlugin):
     def model(self):
         cfg = HostedEngine().retrieve()
 
-        self._configured = os.path.exists(self.VM_CONF_PATH)
+        self._configured = os.path.exists(config.VM_CONF_PATH)
 
         conf_status = "Configured" if self._configured else "Not configured"
         vm = None
         if conf_status == "Configured":
-            f = File(self.VM_CONF_PATH)
+            f = File(config.VM_CONF_PATH)
             if "vmName" in f.read():
                 vm = [line.strip().split("=")[1] for line in f
                       if "vmName" in line][0]
@@ -127,12 +128,14 @@ class Plugin(plugins.NodePlugin):
 
     def on_merge(self, effective_changes):
         def close_dialog():
-            self._dialog.close()
-            self._dialog = None
+            if self._dialog:
+                self._dialog.close()
+                self._dialog = None
         self._install_ready = False
         self._invalid_download = False
         self.temp_cfg_file = False
 
+        effective_changes = Changeset(effective_changes)
         changes = Changeset(self.pending_changes(False))
         effective_model = Changeset(self.model())
         effective_model.update(effective_changes)
@@ -172,79 +175,136 @@ class Plugin(plugins.NodePlugin):
                                          "Couldn't set maintenance level to "
                                          "%s. Check the logs" % level)
 
-        engine_keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
+        if "deploy.additional" in effective_changes:
+            close_dialog()
 
+            def run_additional(*args):
+                with self.application.ui.suspended():
+                    try:
+                        utils.process.call(
+                            "reset; screen hosted-engine --deploy",
+                            shell=True)
+                        sys.stdout.write("Press <Return> to return to the TUI")
+                        console.wait_for_keypress()
+                        self.__persist_configs()
+                    except:
+                        self.logger.exception("hosted-engine failed to "
+                                              "deploy!", exc_info=True)
+
+            txt = ("Please set a password on the RHEV-M page of a host "
+                   "which has previously deployed hosted engine before "
+                   "continuing. This is required to retrieve the setup "
+                   "answer file")
+            dialog = ui.ConfirmationDialog("dialog.add",
+                                           "Prepare remote host", txt)
+
+            yes_btn, cncl_btn = dialog.buttons
+            yes_btn.label("Proceed")
+            yes_btn.on_activate.connect(run_additional)
+            return dialog
         if effective_changes.contains_any(["deploy.confirm"]):
             close_dialog()
 
-            args = tuple(effective_model.values_for(engine_keys)) + (None,)
-            HostedEngine().update(*args)
+            def make_tempfile():
+                if not os.path.exists(config.HOSTED_ENGINE_SETUP_DIR):
+                    os.makedirs(config.HOSTED_ENGINE_SETUP_DIR)
+
+                if not os.path.exists(config.HOSTED_ENGINE_TEMPDIR):
+                    os.makedirs(config.HOSTED_ENGINE_TEMPDIR)
+
+                temp_fd, temp_cfg_file = tempfile.mkstemp()
+                os.close(temp_fd)
+                return temp_cfg_file
 
             imagepath = effective_model["hosted_engine.diskpath"]
             pxe = effective_model["hosted_engine.pxe"]
+            localpath = None
 
+            # FIXME: dynamically enable the fields so we can't get into
+            # this kind of situation. Selection should be ui.Options, not
+            # a checkbox and a blank entry field
+            #
             # Check whether we have unclear conditions
             if not imagepath and not pxe:
                 self._model['display_message'] = "\n\nYou must enter a URL" \
                     " or choose PXE to install the Engine VM"
-                self.show_dialog()
-                return self.ui_content()
+                return self.show_dialog()
             elif imagepath and pxe:
                 self._model['display_message'] = "\n\nPlease choose either " \
                                                  "PXE or an image to " \
                                                  "retrieve, not both"
-                self.show_dialog()
-                return self.ui_content()
+                return self.show_dialog()
 
-            if not os.path.exists(self.HOSTED_ENGINE_SETUP_DIR):
-                os.makedirs(self.HOSTED_ENGINE_SETUP_DIR)
+            self.temp_cfg_file = make_tempfile()
 
-            if not os.path.exists(config.HOSTED_ENGINE_TEMPDIR):
-                os.makedirs(config.HOSTED_ENGINE_TEMPDIR)
+            engine_keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
 
-            temp_fd, self.temp_cfg_file = tempfile.mkstemp()
-            os.close(temp_fd)
+            txs = utils.Transaction("Setting up hosted engine")
 
-            if pxe:
-                self.write_config(pxe=True)
-                self._install_ready = True
-                self.show_dialog()
+            # FIXME: The "None" is for force_enable
+            # Why are we setting force_enable? It clutters the code. We should
+            # move force enabling it to checking for --dry instead
+            model = HostedEngine()
+            args = tuple(effective_model.values_for(engine_keys)) + (None,)
+            model.update(*args)
 
-            else:
-                localpath = os.path.join(self.HOSTED_ENGINE_SETUP_DIR,
+            if imagepath:
+                localpath = os.path.join(config.HOSTED_ENGINE_SETUP_DIR,
                                          os.path.basename(imagepath))
 
-                if os.path.exists(localpath):
-                    # The image is already downloaded. Use that.
-                    self.write_config(imagepath=os.path.basename(imagepath))
-
+            # Check whether we have enough conditions to run it right now
+            if pxe or os.path.exists(localpath):
+                def console_wait(event):
+                    event.wait()
                     self._install_ready = True
                     self.show_dialog()
 
-                else:
-                    path_parsed = urlparse(imagepath)
+                txs += model.transaction(self.temp_cfg_file)
+                progress_dialog = ui.TransactionProgressDialog("dialog.txs",
+                                                               txs, self)
 
-                    if not path_parsed.scheme:
-                        self._model['display_message'] = ("\nCouldn't parse "
-                                                          "URL. please check "
-                                                          "it manually.")
+                t = threading.Thread(target=console_wait,
+                                     args=(progress_dialog.event,))
+                t.start()
 
-                    elif path_parsed.scheme == 'http' or \
-                            path_parsed.scheme == 'https':
-                        self._show_progressbar = True
-                        self.application.show(self.ui_content())
-                        self._image_retrieve(imagepath,
-                                             self.HOSTED_ENGINE_SETUP_DIR)
+                progress_dialog.run()
+
+                # The application doesn't wait until the progressdialog is
+                # done, and it ends up being called asynchronously. Calling
+                # in a thread and waiting to set threading.Event
+                #time.sleep(5)
+
+            # Otherwise start an async download
+            else:
+                path_parsed = urlparse(imagepath)
+
+                if not path_parsed.scheme:
+                    self._model['display_message'] = ("\nCouldn't parse "
+                                                      "URL. please check "
+                                                      "it manually.")
+
+                elif path_parsed.scheme == 'http' or \
+                        path_parsed.scheme == 'https':
+                    self._show_progressbar = True
+                    self.application.show(self.ui_content())
+                    self._image_retrieve(imagepath,
+                                         config.HOSTED_ENGINE_SETUP_DIR)
 
         return self.ui_content()
 
     def show_dialog(self):
         def open_console():
-            if self.temp_cfg_file:
-                utils.process.call("reset; screen " +
-                                   "ovirt-node-hosted-engine-setup" +
-                                   " --config-append=%s" % self.temp_cfg_file,
-                                   shell=True)
+            if self.temp_cfg_file and os.path.isfile(self.temp_cfg_file):
+                try:
+                    utils.process.call("reset; screen " +
+                                       "ovirt-node-hosted-engine-setup" +
+                                       " --config-append=%s" %
+                                       self.temp_cfg_file, shell=True)
+                    self__persist_configs()
+                except:
+                    self.logger.exception("hosted-engine failed to deploy!",
+                                          exc_info=True)
+
             else:
                 self.logger.error("Cannot trigger ovirt-hosted-engine-setup" +
                                   " because the configuration file was not " +
@@ -258,7 +318,7 @@ class Plugin(plugins.NodePlugin):
         if self.application.current_plugin() is self:
             try:
                 # if show_progressbar is not set, the download process has
-                # never started or finished
+                # never started (PXE) or it finished
                 if self._show_progressbar:
                     # Clear out the counters once we're done, and hide the
                     # progress bar
@@ -268,6 +328,14 @@ class Plugin(plugins.NodePlugin):
 
                     self._model["download.progress"] = 0
                     self._model["download.status"] = ""
+
+                # if the temp config file is empty, we removed it in the model
+                # because there was an exception, so don't do anything
+                if self.temp_cfg_file and not os.path.isfile(
+                        self.temp_cfg_file):
+                    self.logger.debug("The temporary config file %s does not"
+                                      "exist. Not running screen")
+                    return
 
                 if self._install_ready:
                     utils.console.writeln("Beginning Hosted Engine Setup ...")
@@ -283,6 +351,7 @@ class Plugin(plugins.NodePlugin):
                     dialog.buttons[0].on_activate.clear()
                     dialog.buttons[0].on_activate.connect(ui.CloseAction())
                     dialog.buttons[0].on_activate.connect(return_ok)
+                    self.application.show(dialog)
                 else:
                     if self._model['display_message']:
                         msg = self._model['display_message']
@@ -303,65 +372,14 @@ class Plugin(plugins.NodePlugin):
 
         self.application.show(self.ui_content())
 
+    def __persist_configs(self):
+        dirs = ["/etc/ovirt-hosted-engine", "/etc/ovirt-hosted-engine-ha",
+                "etc/ovirt-hosted-engine-setup.env.d"]
+        [Config(d).persist(d) for d in dirs]
+
     def _image_retrieve(self, imagepath, setup_dir):
         _downloader = DownloadThread(self, imagepath, setup_dir)
         _downloader.start()
-
-    def magic_type(self, imagepath, type="gzip"):
-        magic_headers = {"gzip": "\x1f\x8b\x08"}
-
-        with open(imagepath) as f:
-            magic = f.read(len(magic_headers[type]))
-
-        return True if magic == magic_headers[type] else False
-
-    def write_config(self, imagepath=None, pxe=False):
-        f = File(self.temp_cfg_file)
-
-        def write(line):
-            f.write("{line}\n".format(line=line), "a")
-
-        self.logger.info("Saving Hosted Engine Config")
-
-        ova_path = None
-        boot = None
-        write("[environment:default]")
-
-        if pxe:
-            boot = "pxe"
-
-        if imagepath:
-            imagepath = os.path.join(self.HOSTED_ENGINE_SETUP_DIR,
-                                     imagepath.lstrip("/"))
-            if imagepath.endswith(".iso"):
-                boot = "cdrom"
-                write("OVEHOSTED_VM/vmCDRom=str:{imagepath}".format(
-                    imagepath=imagepath))
-            else:
-                imagetype = "gzip" if self.magic_type(imagepath) else "Unknown"
-                if imagetype == "gzip":
-                    boot = "disk"
-                    ova_path = imagepath
-                else:
-                    self._invalid_download = True
-                    self._model["display_message"] = ("Downloaded image is "
-                                                      "neither an OVA nor an "
-                                                      "ISO, can't use it")
-
-        write("OVEHOSTED_VM/vmBoot=str:{boot}".format(boot=boot))
-
-        ovastr = "str:{ova_path}".format(ova_path=ova_path) if ova_path else \
-                 "none:None"
-        write("OVEHOSTED_VM/ovfArchive={ovastr}".format(ovastr=ovastr))
-
-        write("OVEHOSTED_CORE/tempDir=str:{tmpdirHE}".format(
-              tmpdirHE=config.HOSTED_ENGINE_TEMPDIR))
-
-        self.logger.info("Wrote hosted engine install configuration to "
-                         "{cfg}".format(cfg=self.temp_cfg_file))
-        self.logger.debug("Wrote config as:")
-        for line in f:
-            self.logger.debug("{line}".format(line=line.strip()))
 
     def __get_ha_status(self):
         def dict_from_string(string):
@@ -388,6 +406,67 @@ class Plugin(plugins.NodePlugin):
             vm_status = "Engine is running on {host}".format(host=host)
 
         return vm_status
+
+
+class DeployDialog(ui.Dialog):
+    """A dialog to input deployment information
+    """
+    def __init__(self, title, plugin):
+        self.keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
+
+        def clear_invalid(dialog, changes):
+            [plugin.stash_change(prefix) for prefix in self.keys]
+
+        entries = [ui.Entry("hosted_engine.diskpath",
+                            "Engine ISO/OVA URL for download:"),
+                   ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM"),
+                   ui.Divider("divider[1]"),
+                   ui.SaveButton("deploy.additional",
+                                 "Add this host to an existing group")]
+        children = [ui.Label("label[0]", "Please provide details for "
+                             "deployment of hosted engine"),
+                    ui.Divider("divider[0]")]
+        children.extend(entries)
+        super(DeployDialog, self).__init__("deploy.dialog", title, children)
+        self.buttons = [ui.SaveButton("deploy.confirm", "Deploy"),
+                        ui.CloseButton("deploy.close", "Cancel")]
+
+        b = plugins.UIElements(self.buttons)
+        b["deploy.close"].on_activate.clear()
+        b["deploy.close"].on_activate.connect(ui.CloseAction())
+        b["deploy.close"].on_activate.connect(clear_invalid)
+
+
+class MaintenanceDialog(ui.Dialog):
+    """A dialog to set HE maintenance level
+    """
+
+    states = [("global", "Global"),
+              ("local", "Local"),
+              ("none", "None")]
+
+    def __init__(self, title, plugin):
+        self.keys = ["maintenance.level"]
+
+        def clear_invalid(dialog, changes):
+            [plugin.stash_change(prefix) for prefix in self.keys]
+
+        entries = [ui.Options("maintenance.level", "Maintenance Level",
+                              self.states)]
+        children = [ui.Divider("divider.options"),
+                    ui.Label("label[0]", "Please select the maintenance "
+                             "level"),
+                    ui.Divider("divider[0]")]
+        children.extend(entries)
+        super(MaintenanceDialog, self).__init__(
+            "maintenance.dialog", title, children)
+        self.buttons = [ui.SaveButton("maintenance.confirm", "Set"),
+                        ui.CloseButton("maintenance.close", "Cancel")]
+
+        b = plugins.UIElements(self.buttons)
+        b["maintenance.close"].on_activate.clear()
+        b["maintenance.close"].on_activate.connect(ui.CloseAction())
+        b["maintenance.close"].on_activate.connect(clear_invalid)
 
 
 class DownloadThread(threading.Thread):
@@ -493,96 +572,10 @@ class DownloadThread(threading.Thread):
                     break
 
         if not ui_is_alive():
+            # If they've exited, clear out the file
             os.unlink(path)
 
         else:
-            self.he_plugin.write_config(os.path.basename(path))
-            self.he_plugin._install_ready = False if \
-                self.he_plugin._invalid_download else True
-            self.he_plugin.show_dialog()
-
-
-class DeployDialog(ui.Dialog):
-
-    """A dialog to input deployment information
-    """
-
-    def __init__(self, title, plugin):
-        self.keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
-
-        def clear_invalid(dialog, changes):
-            [plugin.stash_change(prefix) for prefix in self.keys]
-
-        entries = [ui.Entry("hosted_engine.diskpath",
-                            "Engine ISO/OVA URL for download:"),
-                   ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM")]
-        children = [ui.Label("label[0]", "Please provide details for "
-                             "deployment of hosted engine"),
-                    ui.Divider("divider[0]")]
-        children.extend(entries)
-        super(DeployDialog, self).__init__("deploy.dialog", title, children)
-        self.buttons = [ui.SaveButton("deploy.confirm", "Deploy"),
-                        ui.CloseButton("deploy.close", "Cancel")]
-
-        b = plugins.UIElements(self.buttons)
-        b["deploy.close"].on_activate.clear()
-        b["deploy.close"].on_activate.connect(ui.CloseAction())
-        b["deploy.close"].on_activate.connect(clear_invalid)
-
-
-class MaintenanceDialog(ui.Dialog):
-
-    """A dialog to set HE maintenance level
-    """
-
-    states = [("global", "Global"),
-              ("local", "Local"),
-              ("none", "None")]
-
-    def __init__(self, title, plugin):
-        self.keys = ["maintenance.level"]
-
-        def clear_invalid(dialog, changes):
-            [plugin.stash_change(prefix) for prefix in self.keys]
-
-        entries = [ui.Options("maintenance.level", "Maintenance Level",
-                              self.states)]
-        children = [ui.Divider("divider.options"),
-                    ui.Label("label[0]", "Please select the maintenance "
-                             "level"),
-                    ui.Divider("divider[0]")]
-        children.extend(entries)
-        super(MaintenanceDialog, self).__init__(
-            "maintenance.dialog", title, children)
-        self.buttons = [ui.SaveButton("maintenance.confirm", "Set"),
-                        ui.CloseButton("maintenance.close", "Cancel")]
-
-        b = plugins.UIElements(self.buttons)
-        b["maintenance.close"].on_activate.clear()
-        b["maintenance.close"].on_activate.connect(ui.CloseAction())
-        b["maintenance.close"].on_activate.connect(clear_invalid)
-
-
-class HostedEngine(NodeConfigFileSection):
-    keys = ("OVIRT_HOSTED_ENGINE_IMAGE_PATH",
-            "OVIRT_HOSTED_ENGINE_PXE",
-            "OVIRT_HOSTED_ENGINE_FORCE_ENABLE",
-            )
-
-    @NodeConfigFileSection.map_and_update_defaults_decorator
-    def update(self, imagepath, pxe, force_enable=None):
-        if not isinstance(pxe, bool):
-            pxe = True if pxe.lower() == 'true' else False
-        (valid.Empty() | valid.Text())(imagepath)
-        (valid.Boolean()(pxe))
-        return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath,
-                "OVIRT_HOSTED_ENGINE_PXE": "yes" if pxe else None,
-                "OVIRT_HOSTED_ENGINE_FORCE_ENABLE": "yes" if force_enable
-                else None}
-
-    def retrieve(self):
-        cfg = dict(NodeConfigFileSection.retrieve(self))
-        cfg.update({"pxe": True if cfg["pxe"] == "yes" else False})
-        cfg.update({"force_enable": True if cfg["force_enable"] == "yes"
-                    else False})
-        return cfg
+            self.he_plugin.on_merge({"hosted_engine.diskpath": self.url,
+                                     "deploy.confirm": True})
+            self.he_plugin._install_ready = True

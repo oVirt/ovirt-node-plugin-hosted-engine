@@ -4,6 +4,7 @@ make
 git
 python
 python-devel
+python-nose
 python-pep8
 pyflakes
 pylint
