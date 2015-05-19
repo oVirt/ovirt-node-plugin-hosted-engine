@@ -40,6 +40,7 @@ Provides kickstart files for generating an oVirt Node ISO image containing
 
 %files
 %{python_sitelib}/ovirt/node/setup/hostedengine/__init__.py*
+%{python_sitelib}/ovirt/node/setup/hostedengine/config.py*
 %{python_sitelib}/ovirt/node/setup/hostedengine/hosted_engine_page.py*
 
 %prep
