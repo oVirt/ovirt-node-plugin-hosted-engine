@@ -55,11 +55,6 @@ class Plugin(plugins.NodePlugin):
     def rank(self):
         return 110
 
-    def has_ui(self):
-        is_el6 = utils.system.SystemRelease().is_max_el(6)
-        has_override = HostedEngine().retrieve()["force_enable"]
-        return is_el6 or has_override
-
     def update(self, imagepath):
         (valid.Empty() | valid.Text())(imagepath)
         return {"OVIRT_HOSTED_ENGINE_IMAGE_PATH": imagepath}
