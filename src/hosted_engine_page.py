@@ -130,6 +130,7 @@ class Plugin(plugins.NodePlugin):
             self._dialog.close()
             self._dialog = None
         self._install_ready = False
+        self._invalid_download = False
         self.temp_cfg_file = False
 
         changes = Changeset(self.pending_changes(False))
@@ -167,8 +168,9 @@ class Plugin(plugins.NodePlugin):
                 except:
                     self.logger.exception("Couldn't set maintenance level "
                                           "to %s" % level, exc_info=True)
-                    raise RuntimeError("Couldn't set maintenance level to "
-                                       "%s" % level)
+                    return ui.InfoDialog("dialog.error", "An error occurred",
+                                         "Couldn't set maintenance level to "
+                                         "%s. Check the logs" % level)
 
         engine_keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
 
@@ -341,8 +343,10 @@ class Plugin(plugins.NodePlugin):
                     boot = "disk"
                     ova_path = imagepath
                 else:
-                    raise RuntimeError("Downloaded image is neither an OVA nor"
-                                       " an ISO, can't use it")
+                    self._invalid_download = True
+                    self._model["display_message"] = ("Downloaded image is "
+                                                      "neither an OVA nor an "
+                                                      "ISO, can't use it")
 
         write("OVEHOSTED_VM/vmBoot=str:{boot}".format(boot=boot))
 
@@ -493,7 +497,8 @@ class DownloadThread(threading.Thread):
 
         else:
             self.he_plugin.write_config(os.path.basename(path))
-            self.he_plugin._install_ready = True
+            self.he_plugin._install_ready = False if \
+                self.he_plugin._invalid_download else True
             self.he_plugin.show_dialog()
 
 
