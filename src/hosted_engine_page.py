@@ -434,6 +434,10 @@ class DownloadThread(threading.Thread):
                     return self.he_plugin.show_dialog()
 
                 size = r.headers.get('content-length')
+
+                # Size isn't specified if it's chunked
+                encoding = r.headers.get('transfer-encoding') if not size \
+                    else None
             except requests.exceptions.ConnectionError as e:
                 self.logger.info("Error downloading: %s" % e[0], exc_info=True)
                 self.he_plugin._model['display_message'] = \
@@ -450,7 +454,10 @@ class DownloadThread(threading.Thread):
                 progressbar = self.he_plugin.widgets["download.progress"]
                 status = self.he_plugin.widgets["download.status"]
 
-                current = int(100.0 * (float(downloaded) / float(size)))
+                if encoding == 'chunked':
+                    current = 0
+                elif size:
+                    current = int(100.0 * (float(downloaded) / float(size)))
 
                 progressbar.current(current)
                 speed = calculate_speed()
