@@ -471,7 +471,9 @@ class DownloadThread(threading.Thread):
                     i += 1
                 return "%0.2f %s/s" % (raw, friendly_names[i])
 
-            for chunk in r.iter_content(1024 * 256):
+            chunk = None
+            while chunk != '':
+                chunk = r.raw.read(1024 * 256)
                 downloaded += len(chunk)
                 f.write(chunk)
 
