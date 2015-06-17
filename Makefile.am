@@ -73,39 +73,10 @@ publish:
 
 .PHONY: rpms publish srpms
 
+check-local: static-checks
+	  @echo Passed $@
 
-check-local: doctests pep8 pyflakes
-	@echo -e "---\n Passed.\n---"
-
-check-local-fast:
-	@for M in $(PYTHONSOURCES); \
-	do \
-		export PARENT=$$$$ ; \
-		echo "Fast checks on '$$M'"; \
-		PYTHONPATH=. python -m doctest $$M || kill $$PARENT & \
-		PYTHONPATH=. pep8 -r $$M || kill $$PARENT & \
-		PYTHONPATH=. pyflakes $$M || kill $$PARENT & \
-	done ; wait
-
-doctests:
-	@for M in $(PYTHONSOURCES); \
-	do \
-		echo Doctest on "$$M"; \
-		PYTHONPATH=. nosetests -q --with-doctest $$M || exit 1; \
-	done
-
-pep8:
-	@for M in $(PYTHONSOURCES); \
-	do \
-		echo pep8 on "$$M"; \
-		PYTHONPATH=. pep8 -r $$M || exit 1; \
-	done
-
-pyflakes:
-	@for M in $(PYTHONSOURCES); \
-	do \
-		echo pyflakes on "$$M"; \
-		PYTHONPATH=. pyflakes $$M || exit 1; \
-	done
+static-checks:
+	  $(MAKE) -C src/ check-local
 
 # vim: ts=2

@@ -1,0 +1,47 @@
+
+#PYTHONSOURCES=
+#XMLSOURCES=
+#CLEANFILES=
+
+export PYTHONPATH=$(top_srcdir)/src
+export PYFLAKES_BUILTINS=_
+
+check-local: check-static
+	@echo -e "---\n Passed $@\n---"
+
+check-static: check-static-pep8 check-static-pyflakes
+	@echo Passed $@
+
+check-static-xmllint: $(XMLSOURCES:%=%.xmllint)
+	@echo Passed $@
+
+%.xmllint:
+	xmllint --noout "$*"
+
+check-static-doctests: $(PYTHONSOURCES:%=%.doctest)
+	@echo Passed $@
+
+%.doctest:
+	@if grep -q ">>>" "$*" ; then set -x ; python -m doctest "$*" ; fi ;
+
+check-static-pep8: $(PYTHONSOURCES:%=%.pep8)
+	@echo Passed $@
+
+%.pep8:
+	pep8 -r "$*"
+
+# FIXME Pylint is very strict, needs to be configured
+# Maybe take a peek at a diff. proj. to find a sane configuration
+PYLINT=pylint -f parseable --include-ids=yes --rcfile=.pylintrc
+check-static-pylint: $(PYTHONSOURCES:%=%.pylint)
+	@echo Passed $@
+
+%.pylint:
+	$(PYLINT) "$*"
+
+check-static-pyflakes: $(PYTHONSOURCES:%=%.pyflakes)
+	@echo Passed $@
+
+PYFLAKES_BUILTINS = "_"
+%.pyflakes:
+	pyflakes "$*"

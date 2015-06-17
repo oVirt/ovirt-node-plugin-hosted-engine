@@ -15,6 +15,10 @@
 # MA  02110-1301, USA.  A copy of the GNU General Public License is
 # also available at http://www.gnu.org/copyleft/gpl.html.
 
+include Makefile.check
+
+PYTHONSOURCES:=$(shell find . -wholename '*.py')
+
 nodeconfdir = $(sysconfdir)/sysconfig
 
 pyovirtsetupdir = $(pythondir)/ovirt/node/setup/hostedengine
@@ -23,15 +27,3 @@ pyovirtsetup_PYTHON = \
   hosted_engine_model.py \
   __init__.py \
   config.py
-
-# Requires python-pep8 package (Fedora)
-check-local: check-local-pep8
-
-check-local-pep8:
-	find $(srcdir) -name \*.py | sort | uniq | xargs pep8 --repeat --statistics --count
-
-check-local-doctest:
-	find $(srcdir) -name \*.py | sort | uniq | xargs nose -q --with-doctest
-
-clean-local:
-	rm -f config.py
