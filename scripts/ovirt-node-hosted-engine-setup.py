@@ -21,13 +21,15 @@
 import sys
 from ovirt.node.utils import process
 
+
 def getch():
     """
     Read one character, then return. There's no implementation of this in
     stdlib, and it's nicer than waiting for real input (which requires enter),
     since "Press any key to continue..." actually works
     """
-    import tty, termios
+    import tty
+    import termios
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:

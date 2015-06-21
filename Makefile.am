@@ -74,7 +74,7 @@ publish:
 .PHONY: rpms publish srpms
 
 
-check-local: doctests pep8 pyflakes pylint
+check-local: doctests pep8 pyflakes
 	@echo -e "---\n Passed.\n---"
 
 check-local-fast:
@@ -99,14 +99,6 @@ pep8:
 	do \
 		echo pep8 on "$$M"; \
 		PYTHONPATH=. pep8 -r $$M || exit 1; \
-	done
-
-PYLINT=pylint -f parseable --include-ids=yes --rcfile=.pylintrc
-pylint:
-	@for M in $(PYTHONSOURCES); \
-	do \
-		echo pylint on "$$M"; \
-		PYTHONPATH=. $(PYLINT) $$M || exit 1; \
 	done
 
 pyflakes:

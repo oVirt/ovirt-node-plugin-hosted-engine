@@ -20,7 +20,6 @@
 # also available at http://www.gnu.org/copyleft/gpl.html.
 
 from urlparse import urlparse
-
 from ovirt.node import plugins, ui, utils, valid
 from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
@@ -492,8 +491,10 @@ class DownloadThread(threading.Thread):
 
 
 class DeployDialog(ui.Dialog):
+
     """A dialog to input deployment information
     """
+
     def __init__(self, title, plugin):
         self.keys = ["hosted_engine.diskpath", "hosted_engine.pxe"]
 
@@ -518,6 +519,7 @@ class DeployDialog(ui.Dialog):
 
 
 class MaintenanceDialog(ui.Dialog):
+
     """A dialog to set HE maintenance level
     """
 

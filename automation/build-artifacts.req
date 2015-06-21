@@ -1,0 +1,7 @@
+automake
+autoconf
+make
+git
+python
+python-devel
+rpmbuild
