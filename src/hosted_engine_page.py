@@ -25,11 +25,13 @@ from ovirt.node import plugins, ui, utils, valid
 from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
 from ovirt.node.utils.fs import File
+from ovirt.node.utils import console
 from ovirt_hosted_engine_ha.client import client
 
 import config
 import json
 import os
+import sys
 import requests
 import tempfile
 import threading
@@ -92,7 +94,7 @@ class Plugin(plugins.NodePlugin):
         return {"hosted_engine.diskpath": valid.Empty() | valid.URL()}
 
     def ui_content(self):
-        ws = [ui.Header("header[0]", "Hosted Engine Setup"),
+        ws = [ui.Header("header[0]", "Hosted Engine Status"),
               ui.KeywordLabel("hosted_engine.enabled",
                               ("Hosted Engine: ")),
 
@@ -103,10 +105,20 @@ class Plugin(plugins.NodePlugin):
                               ("Engine Status: ")),
 
               ui.Divider("divider[0]"),
+
+              ui.Header("header[1]", "First Host Setup"),
               ui.Entry("hosted_engine.diskpath",
                        "Engine ISO/OVA URL for download:"),
               ui.Divider("divider[1]"),
-              ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM")
+              ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM"),
+              ui.Button("action.setupengine",
+                        "Start first host setup"),
+
+              ui.Divider("divider[2]"),
+
+              ui.Button("action.additional",
+                        "Start additional host setup")
+
               ]
 
         if self._show_progressbar:
@@ -119,9 +131,7 @@ class Plugin(plugins.NodePlugin):
             ws.append(ui.KeywordLabel("download.status", ""))
 
         page = ui.Page("page", ws)
-        page.buttons = [ui.Button("action.setupengine",
-                                  "Setup Hosted Engine")
-                        ]
+        page.buttons = []
         self.widgets.add(page)
         return page
 
@@ -200,6 +210,16 @@ class Plugin(plugins.NodePlugin):
                         self._image_retrieve(imagepath,
                                              self.HOSTED_ENGINE_SETUP_DIR)
 
+        elif effective_changes.contains_any(["action.additional"]):
+            def run_additional(*args):
+                with self.application.ui.suspended():
+                    utils.process.call("reset; screen hosted-engine --deploy",
+                                       shell=True)
+                    sys.stdout.write("Press <Return> to return to the TUI")
+                    console.wait_for_keypress()
+
+            run_additional()
+
         return self.ui_content()
 
     def show_dialog(self):
@@ -208,6 +228,9 @@ class Plugin(plugins.NodePlugin):
                 utils.process.call("reset; screen ovirt-hosted-engine-setup" +
                                    " --config-append=%s" % self.temp_cfg_file,
                                    shell=True)
+                sys.stdout.write("Hit <Return> to return to the TUI")
+                console.wait_for_keypress()
+
             else:
                 self.logger.error("Cannot trigger ovirt-hosted-engine-setup" +
                                   " because the configuration file was not " +
