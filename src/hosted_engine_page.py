@@ -121,10 +121,11 @@ class Plugin(plugins.NodePlugin):
 
             ws.append(ui.KeywordLabel("download.status", ""))
 
-        ws.extend([ui.Divider("divider[2]"),
-                   ui.Button("action.additional",
-                             "Start additional host setup")
-                   ])
+        else:
+            ws.extend([ui.Divider("divider[2]"),
+                       ui.Button("action.additional",
+                                 "Start additional host setup")
+                       ])
 
         page = ui.Page("page", ws)
         page.buttons = []
