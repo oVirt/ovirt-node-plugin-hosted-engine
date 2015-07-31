@@ -104,21 +104,12 @@ class Plugin(plugins.NodePlugin):
               ui.KeywordLabel("hosted_engine.status",
                               ("Engine Status: ")),
 
-              ui.Divider("divider[0]"),
-
               ui.Header("header[1]", "First Host Setup"),
               ui.Entry("hosted_engine.diskpath",
                        "Engine ISO/OVA URL for download:"),
-              ui.Divider("divider[1]"),
               ui.Checkbox("hosted_engine.pxe", "PXE Boot Engine VM"),
               ui.Button("action.setupengine",
-                        "Start first host setup"),
-
-              ui.Divider("divider[2]"),
-
-              ui.Button("action.additional",
-                        "Start additional host setup")
-
+                        "Start first host setup")
               ]
 
         if self._show_progressbar:
@@ -129,6 +120,11 @@ class Plugin(plugins.NodePlugin):
                 ws.append(ui.ProgressBar("download.progress", 0))
 
             ws.append(ui.KeywordLabel("download.status", ""))
+
+        ws.extend([ui.Divider("divider[2]"),
+                   ui.Button("action.additional",
+                             "Start additional host setup")
+                   ])
 
         page = ui.Page("page", ws)
         page.buttons = []
