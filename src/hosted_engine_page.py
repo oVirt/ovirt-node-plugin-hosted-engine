@@ -24,7 +24,7 @@ from urlparse import urlparse
 from ovirt.node import plugins, ui, utils, valid
 from ovirt.node.plugins import Changeset
 from ovirt.node.config.defaults import NodeConfigFileSection
-from ovirt.node.utils.fs import File
+from ovirt.node.utils.fs import Config, File
 from ovirt.node.utils import console
 from ovirt_hosted_engine_ha.client import client
 
@@ -213,8 +213,14 @@ class Plugin(plugins.NodePlugin):
         elif effective_changes.contains_any(["action.additional"]):
             def run_additional(*args):
                 with self.application.ui.suspended():
-                    utils.process.call("reset; screen hosted-engine --deploy",
-                                       shell=True)
+                    try:
+                        utils.process.call(
+                            "reset; screen hosted-engine --deploy",
+                            shell=True)
+                        self._persist_configs()
+                    except:
+                        self.logger.exception("hosted-engine failed to "
+                                              "deploy!", exc_info=True)
                     sys.stdout.write("Press <Return> to return to the TUI")
                     console.wait_for_keypress()
 
@@ -223,9 +229,10 @@ class Plugin(plugins.NodePlugin):
                    "continuing. This is required to retrieve the setup "
                    "answer file")
 
-            dialog = ui.ConfirmationDialog("dialog.add", "Prepare remote host", txt)
+            dialog = ui.ConfirmationDialog("dialog.add", "Prepare remote host",
+                                           txt)
 
-            yes_btn, cncl_btn =  dialog.buttons
+            yes_btn, cncl_btn = dialog.buttons
             yes_btn.on_activate.connect(ui.CloseAction(dialog=dialog))
             yes_btn.on_activate.connect(run_additional)
 
@@ -236,11 +243,17 @@ class Plugin(plugins.NodePlugin):
     def show_dialog(self):
         def open_console():
             if self.temp_cfg_file:
-                utils.process.call("reset; screen ovirt-hosted-engine-setup" +
-                                   " --config-append=%s" % self.temp_cfg_file,
-                                   shell=True)
-                sys.stdout.write("Hit <Return> to return to the TUI")
-                console.wait_for_keypress()
+                try:
+                    utils.process.call("reset; screen " +
+                                       "ovirt-hosted-engine-setup" +
+                                       " --config-append=%s" % self.temp_cfg_file,
+                                       shell=True)
+                    sys.stdout.write("Hit <Return> to return to the TUI")
+                    console.wait_for_keypress()
+                    self._persist_configs()
+                except:
+                    self.logger.exception("hosted-engine failed to deploy!",
+                                          exc_info=True)
 
             else:
                 self.logger.error("Cannot trigger ovirt-hosted-engine-setup" +
@@ -257,8 +270,8 @@ class Plugin(plugins.NodePlugin):
                 # if show_progressbar is not set, the download process has
                 # never started or finished
                 if self._show_progressbar:
-                    # Clear out the counters once we're done, and hide the progress
-                    # bar
+                    # Clear out the counters once we're done, and hide the
+                    # progress bar
                     self.widgets["download.progress"].current(0)
                     self.widgets["download.status"].text("")
                     self._show_progressbar = False
@@ -299,6 +312,11 @@ class Plugin(plugins.NodePlugin):
                 open_console()
 
         self.application.show(self.ui_content())
+
+    def _persist_configs(self):
+        dirs = ["/etc/ovirt-hosted-engine", "/etc/ovirt-hosted-engine-ha",
+                "/etc/ovirt-hosted-engine-setup.env.d"]
+        [Config().persist(d) for d in dirs]
 
     def _image_retrieve(self, imagepath, setup_dir):
         _downloader = DownloadThread(self, imagepath, setup_dir)
