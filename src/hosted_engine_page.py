@@ -218,7 +218,18 @@ class Plugin(plugins.NodePlugin):
                     sys.stdout.write("Press <Return> to return to the TUI")
                     console.wait_for_keypress()
 
-            run_additional()
+            txt = ("\nPlease set a password on the RHEV-M page of a host "
+                   "which has previously deployed hosted engine before "
+                   "continuing. This is required to retrieve the setup "
+                   "answer file")
+
+            dialog = ui.ConfirmationDialog("dialog.add", "Prepare remote host", txt)
+
+            yes_btn, cncl_btn =  dialog.buttons
+            yes_btn.on_activate.connect(ui.CloseAction(dialog=dialog))
+            yes_btn.on_activate.connect(run_additional)
+
+            self.application.show(dialog)
 
         return self.ui_content()
 
