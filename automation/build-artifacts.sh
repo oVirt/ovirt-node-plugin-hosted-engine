@@ -4,9 +4,9 @@ shopt -s nullglob
 
 # cleanup
 rm -Rf \
-    ../exported-artifacts \
+    exported-artifacts \
     tmp.repos
-mkdir -p ../exported-artifacts
+mkdir -p exported-artifacts
 
 # generate automake/autoconf files
 ./autogen.sh
@@ -16,5 +16,5 @@ make rpm
 
 for file in $(find tmp.repos/ -iregex ".*\.\(tar\.gz\|rpm\)$"); do
     echo "Archiving $file"
-    mv "$file" ../exported-artifacts/
+    mv "$file" exported-artifacts/
 done
