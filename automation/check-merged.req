@@ -9,3 +9,4 @@ python-pep8
 pyflakes
 pylint
 ovirt-node
+rpm-python
