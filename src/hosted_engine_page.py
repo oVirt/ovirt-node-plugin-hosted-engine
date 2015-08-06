@@ -300,7 +300,7 @@ class Plugin(plugins.NodePlugin):
                                        "ovirt-node-hosted-engine-setup" +
                                        " --config-append=%s" %
                                        self.temp_cfg_file, shell=True)
-                    self__persist_configs()
+                    self.__persist_configs()
                 except:
                     self.logger.exception("hosted-engine failed to deploy!",
                                           exc_info=True)
