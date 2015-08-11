@@ -10,3 +10,4 @@ pyflakes
 pylint
 ovirt-node
 rpm-python
+ovirt-hosted-engine-ha

@@ -14,6 +14,7 @@ Group:          Applications/System
 Summary:        Hosted Engine plugin for %{product_family} image
 BuildRequires:  python2-devel
 Requires:       ovirt-hosted-engine-setup
+Requires:       ovirt-hosted-engine-ha
 Requires:       screen
 Requires:       python-requests
 
