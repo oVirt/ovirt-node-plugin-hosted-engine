@@ -104,7 +104,10 @@ class HostedEngine(NodeConfigFileSection):
                             raise RuntimeError("Downloaded image is neither an"
                                                " OVA nor an ISO, can't use it")
 
-                write("OVEHOSTED_VM/vmBoot=str:{boot}".format(boot=boot))
+                bootstr = "str:{boot}".format(
+                    boot=boot
+                ) if boot else "none:None"
+                write("OVEHOSTED_VM/vmBoot={bootstr}".format(bootstr=bootstr))
 
                 ovastr = "str:{ova_path}".format(ova_path=ova_path) if \
                     ova_path else "none:None"
