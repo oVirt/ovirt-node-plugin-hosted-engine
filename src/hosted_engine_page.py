@@ -311,6 +311,7 @@ class Plugin(plugins.NodePlugin):
                                   "referenced in /var/log/ovirt-node.log")
 
         def return_ok(dialog, changes):
+            self.application.ui.close_dialog("Begin Hosted Engine Setup")
             with self.application.ui.suspended():
                 open_console()
 
