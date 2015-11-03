@@ -45,7 +45,7 @@ class Plugin(plugins.NodePlugin):
     _server = None
     _show_progressbar = False
     _model = {}
-    _configured = False
+    _configured = os.path.exists(config.VM_CONF_PATH)
     _install_ready = False
 
     def __init__(self, application):
@@ -64,15 +64,13 @@ class Plugin(plugins.NodePlugin):
     def model(self):
         cfg = HostedEngine().retrieve()
 
-        self._configured = os.path.exists(config.VM_CONF_PATH)
-
         conf_status = "Configured" if self._configured else "Not configured"
         vm = None
         if conf_status == "Configured":
             f = File(config.VM_CONF_PATH)
-            if "vmName" in f.read():
+            if "fqdn" in f.read():
                 vm = [line.strip().split("=")[1] for line in f
-                      if "vmName" in line][0]
+                      if "fqdn" in line][0]
             vm_status = self.__get_ha_status()
         else:
             vm_status = "Hosted engine not configured"
@@ -100,7 +98,7 @@ class Plugin(plugins.NodePlugin):
         if self._configured:
             ws.extend([ui.Divider("divider[0]"),
                        ui.KeywordLabel("hosted_engine.vm",
-                                       ("Engine VM Name: ")),
+                                       ("Engine VM: ")),
                        ui.KeywordLabel("hosted_engine.status",
                                        ("Engine Status: ")),
                        ui.Button("button.status", "Hosted Engine VM status"),
