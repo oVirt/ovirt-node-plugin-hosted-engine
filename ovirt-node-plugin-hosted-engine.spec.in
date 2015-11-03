@@ -20,6 +20,9 @@ Requires:       python-requests
 
 BuildArch:      noarch
 
+BuildRequires:  autoconf
+BuildRequires:  automake
+
 %package recipe
 Summary:        Kickstarts for building oVirt Node isos including %{name}
 Group:          Applications/System
