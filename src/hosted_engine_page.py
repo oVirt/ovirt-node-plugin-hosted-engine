@@ -372,7 +372,7 @@ class Plugin(plugins.NodePlugin):
 
     def __persist_configs(self):
         dirs = ["/etc/ovirt-hosted-engine", "/etc/ovirt-hosted-engine-ha",
-                "etc/ovirt-hosted-engine-setup.env.d"]
+                "/etc/ovirt-hosted-engine-setup.env.d"]
         [Config(d).persist(d) for d in dirs]
 
     def _image_retrieve(self, imagepath, setup_dir):
