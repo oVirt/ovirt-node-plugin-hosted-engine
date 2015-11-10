@@ -270,7 +270,7 @@ class Plugin(plugins.NodePlugin):
                 # The application doesn't wait until the progressdialog is
                 # done, and it ends up being called asynchronously. Calling
                 # in a thread and waiting to set threading.Event
-                #time.sleep(5)
+                # time.sleep(5)
 
             # Otherwise start an async download
             else:
