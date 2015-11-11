@@ -481,12 +481,13 @@ class MaintenanceDialog(ui.Dialog):
 
     def __init__(self, title, plugin):
         self.keys = ["maintenance.level"]
+        self.plugin = plugin
 
         def clear_invalid(dialog, changes):
             [plugin.stash_change(prefix) for prefix in self.keys]
 
         entries = [ui.Options("maintenance.level", "Maintenance Level",
-                              self.states)]
+                              self.states, selected=self.__vm_status())]
         children = [ui.Divider("divider.options"),
                     ui.Label("label[0]", "Please select the maintenance "
                              "level"),
@@ -501,6 +502,27 @@ class MaintenanceDialog(ui.Dialog):
         b["maintenance.close"].on_activate.clear()
         b["maintenance.close"].on_activate.connect(ui.CloseAction())
         b["maintenance.close"].on_activate.connect(clear_invalid)
+
+    def __vm_status(self):
+        ha_cli = client.HAClient()
+        level = None
+
+        try:
+            level = "global" if ha_cli.get_all_stats(
+                client.HAClient.StatModes.GLOBAL)[0]["maintenance"] else None
+        except KeyError:
+            # Stats returned but no global section
+            pass
+
+        if level is None:
+            try:
+                level = "local" if ha_cli.get_all_stats()[1]["maintenance"] \
+                        else "none"
+            except:
+                self.plugin.logger.debug("Couldn't get HA stats!",
+                                         exc_info=True)
+
+        return level
 
 
 class DownloadThread(threading.Thread):
