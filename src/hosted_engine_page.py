@@ -45,7 +45,6 @@ class Plugin(plugins.NodePlugin):
     _server = None
     _show_progressbar = False
     _model = {}
-    _configured = os.path.exists(config.VM_CONF_PATH)
     _install_ready = False
 
     def __init__(self, application):
@@ -64,17 +63,14 @@ class Plugin(plugins.NodePlugin):
     def model(self):
         cfg = HostedEngine().retrieve()
 
-        conf_status = "Configured" if self._configured else "Not configured"
+        conf_status = "Configured" if self._configured() else "Not configured"
+        vm_status = self.__get_vm_status()
         vm = None
-        if conf_status == "Configured":
+        if self._configured()
             f = File(config.VM_CONF_PATH)
             if "fqdn" in f.read():
                 vm = [line.strip().split("=")[1] for line in f
                       if "fqdn" in line][0]
-            vm_status = self.__get_ha_status()
-        else:
-            vm_status = "Hosted engine not configured"
-
         model = {
             "hosted_engine.enabled": str(conf_status),
             "hosted_engine.vm": vm,
@@ -91,11 +87,14 @@ class Plugin(plugins.NodePlugin):
         return {"hosted_engine.diskpath": valid.Empty() | valid.URL()}
 
     def ui_content(self):
+        # Update the status on a page refresh
+        self._model["hosted_engine.status"] = self.__get_vm_status()
+
         ws = [ui.Header("header[0]", "Hosted Engine Setup"),
               ui.KeywordLabel("hosted_engine.enabled",
                               ("Hosted Engine: "))]
 
-        if self._configured:
+        if self._configured():
             ws.extend([ui.Divider("divider[0]"),
                        ui.KeywordLabel("hosted_engine.vm",
                                        ("Engine VM: ")),
@@ -371,6 +370,9 @@ class Plugin(plugins.NodePlugin):
 
         self.application.show(self.ui_content())
 
+    def _configured(self):
+        return os.path.exists(config.VM_CONF_PATH)
+
     def __persist_configs(self):
         dirs = ["/etc/ovirt-hosted-engine", "/etc/ovirt-hosted-engine-ha",
                 "/etc/ovirt-hosted-engine-setup.env.d"]
@@ -405,6 +407,12 @@ class Plugin(plugins.NodePlugin):
             vm_status = "Engine is running on {host}".format(host=host)
 
         return vm_status
+
+    def __get_vm_status(self):
+        if self._configured()
+            return self.__get_ha_status()
+        else:
+            return "Hosted engine not configured"
 
 
 class DeployDialog(ui.Dialog):
