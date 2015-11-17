@@ -118,6 +118,7 @@ class Plugin(plugins.NodePlugin):
             ws.append(ui.KeywordLabel("download.status", ""))
 
         page = ui.Page("page", ws)
+        page.buttons = []
         self.widgets.add(page)
         return page
 
