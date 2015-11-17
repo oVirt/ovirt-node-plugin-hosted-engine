@@ -59,7 +59,7 @@ class HostedEngine(NodeConfigFileSection):
             title = "Writing Hosted Engine Config File"
 
             def commit(self):
-                imagepath, pxe, _ = HostedEngine().retrieve().values()
+                cfg = HostedEngine().retrieve()
 
                 def magic_type(mtype="gzip"):
                     magic_headers = {"gzip": "\x1f\x8b\x08"}
@@ -82,12 +82,12 @@ class HostedEngine(NodeConfigFileSection):
                 boot = None
                 write("[environment:default]")
 
-                if pxe:
+                if cfg["pxe"]:
                     boot = "pxe"
 
-                if imagepath:
+                if cfg["imagepath"]:
                     imagepath = os.path.join(config.HOSTED_ENGINE_SETUP_DIR,
-                                             os.path.basename(imagepath
+                                             os.path.basename(cfg["imagepath"]
                                                               ).lstrip("/"))
                     if imagepath.endswith(".iso"):
                         boot = "cdrom"
