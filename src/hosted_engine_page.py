@@ -24,6 +24,7 @@ from ovirt.node import plugins, ui, utils, valid
 from ovirt.node.plugins import Changeset
 from ovirt.node.utils import console
 from ovirt.node.utils.fs import Config, File
+from ovirt.node.utils.network import NodeNetwork
 from ovirt_hosted_engine_ha.client import client
 from . import config
 from .hosted_engine_model import HostedEngine
@@ -89,9 +90,17 @@ class Plugin(plugins.NodePlugin):
         # Update the status on a page refresh
         self._model["hosted_engine.status"] = self.__get_vm_status()
 
-        ws = [ui.Header("header[0]", "Hosted Engine Setup"),
-              ui.KeywordLabel("hosted_engine.enabled",
-                              ("Hosted Engine: "))]
+        network_up = NodeNetwork().is_configured()
+
+        ws = [ui.Header("header[0]", "Hosted Engine Setup")]
+
+        if network_up:
+            ws.extend([ui.KeywordLabel("hosted_engine.enabled",
+                                       ("Hosted Engine: "))])
+        else:
+            ws.extend([ui.Notice("network.notice", "Networking is not " +
+                                 "configured please configure it before " +
+                                 "setting up hosted engine")])
 
         if self._configured():
             ws.extend([ui.Divider("divider[0]"),
@@ -103,8 +112,9 @@ class Plugin(plugins.NodePlugin):
                        ui.Button("button.maintenance",
                                  "Set Hosted Engine maintenance")])
 
-        ws.extend([ui.Divider("divider.button"),
-                   ui.Button("button.dialog", "Deploy Hosted Engine")])
+        if network_up:
+            ws.extend([ui.Divider("divider.button"),
+                       ui.Button("button.dialog", "Deploy Hosted Engine")])
 
         if self._show_progressbar:
             if "progress" in self._model:
