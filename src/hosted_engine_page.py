@@ -66,7 +66,7 @@ class Plugin(plugins.NodePlugin):
         conf_status = "Configured" if self._configured() else "Not configured"
         vm_status = self.__get_vm_status()
         vm = None
-        if self._configured()
+        if self._configured():
             f = File(config.VM_CONF_PATH)
             if "fqdn" in f.read():
                 vm = [line.strip().split("=")[1] for line in f
@@ -410,7 +410,7 @@ class Plugin(plugins.NodePlugin):
         return vm_status
 
     def __get_vm_status(self):
-        if self._configured()
+        if self._configured():
             return self.__get_ha_status()
         else:
             return "Hosted engine not configured"
