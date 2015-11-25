@@ -66,11 +66,10 @@ class Plugin(plugins.NodePlugin):
         conf_status = "Configured" if self._configured() else "Not configured"
         vm_status = self.__get_vm_status()
         vm = None
+
         if self._configured():
-            f = File(config.VM_CONF_PATH)
-            if "fqdn" in f.read():
-                vm = [line.strip().split("=")[1] for line in f
-                      if "fqdn" in line][0]
+            vm = self._read_attr_config(config.VM_CONF_PATH, "fqdn")
+
         model = {
             "hosted_engine.enabled": str(conf_status),
             "hosted_engine.vm": vm,
@@ -370,6 +369,25 @@ class Plugin(plugins.NodePlugin):
                 open_console()
 
         self.application.show(self.ui_content())
+
+    def _read_attr_config(self, config_file, attr):
+        """
+        Read Attribute value from a config file
+
+        config_file -- A .conf file
+        attr -- The attribute for reading the value assigned
+
+        Returns
+        The value for attribute or None (No attribute found)
+        """
+        value = None
+
+        f = File(config_file)
+        if attr in f.read():
+            value = [line.strip().split("=")[1] for line in f
+                     if attr in line][0]
+
+        return value
 
     def _configured(self):
         return os.path.exists(config.VM_CONF_PATH)
