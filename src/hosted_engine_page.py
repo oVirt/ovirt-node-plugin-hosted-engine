@@ -389,7 +389,15 @@ class Plugin(plugins.NodePlugin):
         return value
 
     def _configured(self):
-        return os.path.exists(config.VM_CONF_PATH)
+        """
+        Check if Hosted Engine is configured checking if
+        hosted-engine.conf exists and contains vm_disk_id
+        with a value.
+
+        Return True or False
+        """
+        return bool(os.path.exists(config.VM_CONF_PATH) and
+                    self._read_attr_config(config.VM_CONF_PATH, "vm_disk_id"))
 
     def __persist_configs(self):
         dirs = ["/etc/ovirt-hosted-engine", "/etc/ovirt-hosted-engine-ha",
