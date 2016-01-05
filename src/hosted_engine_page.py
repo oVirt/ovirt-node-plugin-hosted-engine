@@ -156,9 +156,16 @@ class Plugin(plugins.NodePlugin):
             return self._dialog
 
         if "button.status" in effective_changes:
-            contents = utils.process.check_output(["hosted-engine",
-                                                   "--vm-status"],
-                                                  stderr=utils.process.STDOUT)
+            try:
+                contents = utils.process.check_output(
+                    ["hosted-engine",
+                     "--vm-status"],
+                    stderr=utils.process.STDOUT
+                )
+            except utils.process.CalledProcessError:
+                contents = "\nFailed to collect hosted engine vm status, " \
+                           "check ovirt-ha-broker logs."
+
             return ui.TextViewDialog("output.dialog", "Hosted Engine VM "
                                      "Status", contents)
 
