@@ -166,6 +166,7 @@ class Plugin(plugins.NodePlugin):
                 contents = "\nFailed to collect hosted engine vm status, " \
                            "check ovirt-ha-broker logs."
 
+            self.application.show(self.ui_content())
             return ui.TextViewDialog("output.dialog", "Hosted Engine VM "
                                      "Status", contents)
 
