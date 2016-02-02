@@ -323,6 +323,7 @@ class Plugin(plugins.NodePlugin):
                                   " because the configuration file was not " +
                                   "generated, please check the location " +
                                   "referenced in /var/log/ovirt-node.log")
+            self.application.show(self.ui_content())
 
         def return_ok(dialog, changes):
             self.application.ui.close_dialog("Begin Hosted Engine Setup")
