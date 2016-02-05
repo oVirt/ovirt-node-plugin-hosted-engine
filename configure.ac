@@ -25,7 +25,7 @@ define([VERSION_SUFFIX], [_ovirt36])
 
 AC_INIT([ovirt-node-plugin-hosted-engine], VERSION_NUMBER[]VERSION_SUFFIX, [devel@ovirt.org])
 PACKAGE_RPM_VERSION="VERSION_NUMBER"
-PACKAGE_RPM_RELEASE="1.$(echo VERSION_SUFFIX | sed 's/^_//')"
+PACKAGE_RPM_RELEASE="2.$(echo VERSION_SUFFIX | sed 's/^_//')"
 AC_SUBST([PACKAGE_RPM_VERSION])
 AC_SUBST([PACKAGE_RPM_RELEASE])
 AC_SUBST([HE_TMP_DIR], ['/data/ovirt-hosted-engine-setup/tmp-setup'])
