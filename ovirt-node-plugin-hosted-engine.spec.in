@@ -72,6 +72,9 @@ make install DESTDIR=%{buildroot}
 %{recipe_root}
 
 %changelog
+* Fri Feb 05 2016 Douglas Schilling Landgraf <dougsland@redhat.com> 0.3.0-1.ovirt36
+- Refresh build
+
 * Tue May 18 2015 Ryan Barry <rbarry@redhat.com> 0.0.2
 - Refactor the page, move model to another file
 
