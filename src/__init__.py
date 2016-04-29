@@ -18,7 +18,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 # MA  02110-1301, USA.  A copy of the GNU General Public License is
 # also available at http://www.gnu.org/copyleft/gpl.html.
-from ovirt.node.utils.expose import Feature, Owner
 import hosted_engine_page
 
 """
@@ -28,9 +27,3 @@ Hosted Engine Plugin
 
 def createPlugins(application):
     hosted_engine_page.Plugin(application)
-
-
-def createPluginFeatures(application):
-    application.register(Feature(owner=Owner(name=__package__),
-                                 name="hosted-engine",
-                                 description="Hosted Engine setup"))
