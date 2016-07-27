@@ -84,7 +84,7 @@ class Plugin(plugins.NodePlugin):
         return self._model
 
     def validators(self):
-        return {"hosted_engine.diskpath": valid.Empty() | valid.URL()}
+        return {"hosted_engine.diskpath": valid.Empty() | valid.URL() | valid.FileURL() }
 
     def ui_content(self):
         # Update the status on a page refresh
@@ -262,7 +262,9 @@ class Plugin(plugins.NodePlugin):
             args = tuple(effective_model.values_for(engine_keys)) + (None,)
             model.update(*args)
 
-            if imagepath:
+            if "file://" in imagepath:
+                localpath = imagepath[7:]
+            elif imagepath:
                 localpath = os.path.join(config.HOSTED_ENGINE_SETUP_DIR,
                                          os.path.basename(imagepath))
 
