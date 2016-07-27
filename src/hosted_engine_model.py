@@ -86,9 +86,12 @@ class HostedEngine(NodeConfigFileSection):
                     boot = "pxe"
 
                 if cfg["imagepath"]:
-                    imagepath = os.path.join(config.HOSTED_ENGINE_SETUP_DIR,
-                                             os.path.basename(cfg["imagepath"]
-                                                              ).lstrip("/"))
+                    if "file://" in cfg["imagepath"]:
+                        imagepath = cfg["imagepath"][7:]
+                    else:
+                        imagepath = os.path.join(config.HOSTED_ENGINE_SETUP_DIR,
+                                                 os.path.basename(cfg["imagepath"]
+                                                                  ).lstrip("/"))
                     if imagepath.endswith(".iso"):
                         boot = "cdrom"
                         write("OVEHOSTED_VM/vmCDRom=str:{imagepath}".format(
