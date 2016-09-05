@@ -84,7 +84,8 @@ class Plugin(plugins.NodePlugin):
         return self._model
 
     def validators(self):
-        return {"hosted_engine.diskpath": valid.Empty() | valid.URL() | valid.FileURL() }
+        return {"hosted_engine.diskpath": valid.Empty() |
+                valid.URL() | valid.FileURL()}
 
     def ui_content(self):
         # Update the status on a page refresh
